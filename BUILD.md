@@ -387,8 +387,8 @@ MIT License - See original source file for full license text.
 ## Support
 
 For issues and questions:
-- GitHub Issues: <your-repo-url>/issues
-- Email: <your-email>
+- GitHub Discussion Board
+- Email: dfeen87@gmail.com
 
 ## Credits
 

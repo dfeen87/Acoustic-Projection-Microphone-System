@@ -426,6 +426,12 @@ See LICENSE file for full terms.
 **Release Date**: December 2025  
 **Last Updated**: December 11, 2025
 
+### 1.0.0
+- Initial release
+- Offline + online translation
+- Noise/echo cancellation
+- Multi‑platform installers
+
 ---
 
 <div align="center">

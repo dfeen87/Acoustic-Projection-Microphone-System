@@ -1,8 +1,8 @@
-# Multi-stage Dockerfile for APM System
+# ============================
 # Stage 1: Build environment
+# ============================
 FROM ubuntu:22.04 AS builder
 
-# Prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install build dependencies
@@ -18,61 +18,53 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install TensorFlow Lite (optional)
-RUN pip3 install tensorflow && \
-    mkdir -p /opt/tensorflow && \
-    cp -r $(python3 -c "import tensorflow as tf; print(tf.__path__[0])")/lite /opt/tensorflow/ || true
+# Optional: TensorFlow Lite (Python version)
+RUN pip3 install tensorflow || true
 
-# Create workspace
 WORKDIR /workspace/apm
 
-# Copy source files
+# Copy only the files you actually have
 COPY CMakeLists.txt .
 COPY include/ include/
-COPY src/ src/
-COPY tests/ tests/
-COPY examples/ examples/
-COPY benchmarks/ benchmarks/
+COPY main.cpp .
+COPY apm_system.h .
+COPY fft_processor.h .
+COPY tflite_translation_engine.h .
 
-# Build the project
+# Build
 RUN mkdir build && cd build && \
-    cmake .. \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DBUILD_TESTS=ON \
-        -DBUILD_BENCHMARKS=ON && \
-    cmake --build . -j$(nproc) && \
-    ctest --output-on-failure
+    cmake .. -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build . -j$(nproc)
 
 # Install to /usr/local
 RUN cd build && cmake --install .
 
+# ============================
 # Stage 2: Runtime environment
+# ============================
 FROM ubuntu:22.04 AS runtime
 
-# Install runtime dependencies only
 RUN apt-get update && apt-get install -y \
     libfftw3-single3 \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy installed libraries and headers
-COPY --from=builder /usr/local/lib/libapm.a /usr/local/lib/
-COPY --from=builder /usr/local/include/apm /usr/local/include/apm
-COPY --from=builder /usr/local/lib/cmake/apm /usr/local/lib/cmake/apm
+# Copy installed library + headers
+COPY --from=builder /usr/local/lib /usr/local/lib
+COPY --from=builder /usr/local/include /usr/local/include
 
-# Copy example binary
-COPY --from=builder /workspace/apm/build/apm_example /usr/local/bin/
+# Copy the built binary
+COPY --from=builder /workspace/apm/build/apm /usr/local/bin/apm
 
-# Set library path
 ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 
-# Default command
-CMD ["/usr/local/bin/apm_example"]
+CMD ["/usr/local/bin/apm"]
 
-# Stage 3: Development environment (optional)
+# ============================
+# Stage 3: Dev environment
+# ============================
 FROM builder AS development
 
-# Install additional development tools
 RUN apt-get update && apt-get install -y \
     gdb \
     valgrind \
@@ -84,13 +76,7 @@ RUN apt-get update && apt-get install -y \
     graphviz \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python tools for analysis
-RUN pip3 install \
-    matplotlib \
-    numpy \
-    scipy
+RUN pip3 install numpy scipy matplotlib
 
 WORKDIR /workspace/apm
-
-# Keep the build directory for development
 CMD ["/bin/bash"]

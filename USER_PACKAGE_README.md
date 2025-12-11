@@ -1,6 +1,7 @@
 # 🎧 APM Headphone Translator - Download Package
 
 **Turn your ordinary headphones into a real-time translation device!**
+**Real‑time translation for any headphones. Offline or online. Free and open source.**
 
 ---
 

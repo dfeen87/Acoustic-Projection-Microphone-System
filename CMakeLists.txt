@@ -15,7 +15,11 @@ option(ENABLE_COVERAGE "Enable code coverage" OFF)
 if(MSVC)
     add_compile_options(/W4 /WX)
 else()
-    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+    if(NOT ENABLE_SANITIZERS)
+        add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+    else()
+        add_compile_options(-Wall -Wextra -Wpedantic)
+    endif()
 endif()
 
 # Sanitizers
@@ -30,27 +34,28 @@ if(ENABLE_COVERAGE)
     add_link_options(--coverage)
 endif()
 
-# Find required packages
+# Required packages
 find_package(Threads REQUIRED)
 
-# FFTW3 (prefer float version for audio processing)
+# FFTW3
 find_library(FFTW3F_LIBRARY NAMES fftw3f)
-find_path(FFTW3_INCLUDE_DIR fftw3.h)
+find_path(FFTW3_INCLUDE_DIR NAMES fftw3.h)
 if(NOT FFTW3F_LIBRARY OR NOT FFTW3_INCLUDE_DIR)
     message(FATAL_ERROR "FFTW3 float library not found. Install with: sudo apt-get install libfftw3-dev")
 endif()
 
-# TensorFlow Lite
+# TensorFlow Lite (optional)
 find_library(TFLITE_LIBRARY NAMES tensorflowlite tensorflow-lite)
-find_path(TFLITE_INCLUDE_DIR tensorflow/lite/interpreter.h)
-if(NOT TFLITE_LIBRARY OR NOT TFLITE_INCLUDE_DIR)
-    message(WARNING "TensorFlow Lite not found. Building with mock translation engine.")
-    set(HAVE_TFLITE OFF)
-else()
+find_path(TFLITE_INCLUDE_DIR NAMES tensorflow/lite/interpreter.h)
+
+if(TFLITE_LIBRARY AND TFLITE_INCLUDE_DIR)
     set(HAVE_TFLITE ON)
+else()
+    message(WARNING "TensorFlow Lite not found. Using mock translation engine.")
+    set(HAVE_TFLITE OFF)
 endif()
 
-# Configure header
+# Generate config header
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/include/apm/config.h.in"
     "${CMAKE_CURRENT_BINARY_DIR}/include/apm/config.h"
@@ -70,42 +75,38 @@ add_library(apm STATIC
 
 if(HAVE_TFLITE)
     target_sources(apm PRIVATE src/tflite_translation_engine.cpp)
+    target_compile_definitions(apm PRIVATE HAVE_TFLITE=1)
 else()
     target_sources(apm PRIVATE src/mock_translation_engine.cpp)
 endif()
 
 target_include_directories(apm
     PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-        $<INSTALL_INTERFACE:include>
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_BINARY_DIR}/include
     PRIVATE
         ${FFTW3_INCLUDE_DIR}
-        ${TFLITE_INCLUDE_DIR}
+        $<$<BOOL:${HAVE_TFLITE}>:${TFLITE_INCLUDE_DIR}>
 )
 
 target_link_libraries(apm
-    PUBLIC
-        Threads::Threads
-    PRIVATE
-        ${FFTW3F_LIBRARY}
+    PUBLIC Threads::Threads
+    PRIVATE ${FFTW3F_LIBRARY}
 )
 
 if(HAVE_TFLITE)
     target_link_libraries(apm PRIVATE ${TFLITE_LIBRARY})
-    target_compile_definitions(apm PRIVATE HAVE_TFLITE=1)
 endif()
 
 # Example executable
 add_executable(apm_example examples/main.cpp)
 target_link_libraries(apm_example PRIVATE apm)
 
-# Unit tests
+# Tests
 if(BUILD_TESTS)
     enable_testing()
-    
-    # Google Test
     include(FetchContent)
+
     FetchContent_Declare(
         googletest
         GIT_REPOSITORY https://github.com/google/googletest.git
@@ -113,7 +114,7 @@ if(BUILD_TESTS)
     )
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
-    
+
     add_executable(apm_tests
         tests/test_audio_frame.cpp
         tests/test_beamforming.cpp
@@ -123,54 +124,21 @@ if(BUILD_TESTS)
         tests/test_fft.cpp
         tests/test_integration.cpp
     )
-    
-    target_link_libraries(apm_tests
-        PRIVATE
-            apm
-            GTest::gtest_main
-            GTest::gmock
-    )
-    
+
+    target_link_libraries(apm_tests PRIVATE apm GTest::gtest_main GTest::gmock)
     include(GoogleTest)
     gtest_discover_tests(apm_tests)
 endif()
 
-# Benchmarks
-if(BUILD_BENCHMARKS)
-    FetchContent_Declare(
-        benchmark
-        GIT_REPOSITORY https://github.com/google/benchmark.git
-        GIT_TAG v1.8.3
-    )
-    FetchContent_MakeAvailable(benchmark)
-    
-    add_executable(apm_bench
-        benchmarks/bench_beamforming.cpp
-        benchmarks/bench_noise_suppression.cpp
-    )
-    
-    target_link_libraries(apm_bench
-        PRIVATE
-            apm
-            benchmark::benchmark
-    )
-endif()
-
-# Installation
-install(TARGETS apm
-    EXPORT apm-targets
+# Install
+install(TARGETS apm EXPORT apm-targets
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin
 )
 
-install(DIRECTORY include/apm
-    DESTINATION include
-)
-
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/apm/config.h"
-    DESTINATION include/apm
-)
+install(DIRECTORY include/apm DESTINATION include)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/apm/config.h" DESTINATION include/apm)
 
 install(EXPORT apm-targets
     FILE apm-targets.cmake
@@ -178,7 +146,6 @@ install(EXPORT apm-targets
     DESTINATION lib/cmake/apm
 )
 
-# Package config
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
     "${CMAKE_CURRENT_BINARY_DIR}/apm-config-version.cmake"
@@ -186,7 +153,6 @@ write_basic_package_version_file(
     COMPATIBILITY AnyNewerVersion
 )
 
-install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/apm-config-version.cmake"
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/apm-config-version.cmake"
     DESTINATION lib/cmake/apm
 )

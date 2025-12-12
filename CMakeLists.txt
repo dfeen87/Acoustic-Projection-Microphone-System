@@ -217,6 +217,7 @@ endif()
 
 # Install binaries
 install(TARGETS apm apm_core
+    EXPORT APMTargets
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
@@ -287,36 +288,40 @@ endif()
 # PACKAGE CONFIGURATION
 # ============================================================================
 
-# Generate package config files for find_package()
-include(CMakePackageConfigHelpers)
+# Only create package config if template exists
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cmake/APMConfig.cmake.in)
+    include(CMakePackageConfigHelpers)
 
-# Create config file
-configure_package_config_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/APMConfig.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/APMConfig.cmake
-    INSTALL_DESTINATION lib/cmake/APM
-)
+    # Create config file
+    configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/APMConfig.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/APMConfig.cmake
+        INSTALL_DESTINATION lib/cmake/APM
+    )
 
-# Create version file
-write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/APMConfigVersion.cmake
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY SameMajorVersion
-)
+    # Create version file
+    write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/APMConfigVersion.cmake
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion
+    )
 
-# Install package config files
-install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/APMConfig.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/APMConfigVersion.cmake
-    DESTINATION lib/cmake/APM
-)
+    # Install package config files
+    install(FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/APMConfig.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/APMConfigVersion.cmake
+        DESTINATION lib/cmake/APM
+    )
 
-# Export targets
-install(EXPORT APMTargets
-    FILE APMTargets.cmake
-    NAMESPACE APM::
-    DESTINATION lib/cmake/APM
-)
+    # Export targets
+    install(EXPORT APMTargets
+        FILE APMTargets.cmake
+        NAMESPACE APM::
+        DESTINATION lib/cmake/APM
+    )
+    
+    message(STATUS "Package configuration will be installed")
+endif()
 
 # ============================================================================
 # CONFIGURATION SUMMARY

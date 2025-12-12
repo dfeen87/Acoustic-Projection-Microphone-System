@@ -16,6 +16,36 @@ Production-grade implementation of an advanced acoustic projection microphone sy
 - **Directional Audio Projection**: Phased array synthesis for targeted audio delivery
 - **High Performance**: FFTW-optimized FFT, multi-threaded processing, SIMD-ready
 
+## 🌍 Local Translation (100% Private)
+
+APM System includes **fully local speech recognition and translation** using state-of-the-art AI models. Your conversations never leave your device.
+
+### Features
+- 🔒 **100% Private** - No cloud APIs, all processing on-device
+- 🌐 **200+ Languages** - Powered by Meta's NLLB translation model
+- 🎤 **Accurate Speech Recognition** - OpenAI Whisper for transcription
+- ⚡ **Real-time Performance** - 2-4 seconds per sentence (GPU) or 5-8 seconds (CPU)
+- 🚫 **No Internet Required** - Works completely offline after initial setup
+
+### Quick Setup
+
+```bash
+# One-command setup
+./scripts/setup_translation.sh
+
+# Activate and test
+source venv/bin/activate
+python3 scripts/translation_bridge.py audio.wav --source en --target es
+```
+
+### Supported Languages
+
+English, Spanish, French, German, Italian, Portuguese, Russian, Chinese, Japanese, Korean, Arabic, Hindi, and 180+ more.
+
+**See [TRANSLATION_QUICKSTART.md](TRANSLATION_QUICKSTART.md) for complete documentation.**
+
+---
+
 ## Architecture
 
 ```

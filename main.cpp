@@ -548,13 +548,7 @@ public:
 // ============================================================================
 
 class APMSystem {
-    BeamformingEngine beamformer_;
-    NoiseSuppressionEngine noise_suppressor_;
-    EchoCancellationEngine echo_canceller_;
-    VoiceActivityDetector vad_;
-    DirectionalProjector projector_;
-    std::unique_ptr<TranslationEngine> translator_;
-    
+public:
     struct Config {
         int num_microphones = 4;
         float mic_spacing_m = 0.012f;
@@ -564,8 +558,30 @@ class APMSystem {
         std::string source_language = "en-US";
         std::string target_language = "es-ES";
     };
-    
+
+    // Main constructor
+    explicit APMSystem(const Config& cfg = Config{})
+        : beamformer_(cfg.num_microphones, cfg.mic_spacing_m),
+          noise_suppressor_(),
+          echo_canceller_(2048),
+          vad_(),
+          projector_(cfg.num_speakers, cfg.speaker_spacing_m),
+          translator_(std::make_unique<MockTranslationEngine>()),
+          config_(cfg) {}
+
+    // Optional: expose config
+    const Config& config() const { return config_; }
+
+private:
+    BeamformingEngine beamformer_;
+    NoiseSuppressionEngine noise_suppressor_;
+    EchoCancellationEngine echo_canceller_;
+    VoiceActivityDetector vad_;
+    DirectionalProjector projector_;
+    std::unique_ptr<TranslationEngine> translator_;
+
     Config config_;
+};
 
 public:
     APMSystem(const Config& cfg = Config{})

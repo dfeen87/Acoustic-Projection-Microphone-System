@@ -306,8 +306,8 @@ jobs:
         context: .
         push: ${{ github.event_name == 'release' }}
         tags: |
-          ${{ secrets.DOCKER_USERNAME }}/apm-system:latest
-          ${{ secrets.DOCKER_USERNAME }}/apm-system:${{ github.ref_name }}
+          dfeen87/apm-system:latest
+          dfeen87/apm-system:${{ github.ref_name }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 

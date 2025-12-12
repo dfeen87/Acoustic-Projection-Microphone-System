@@ -547,6 +547,8 @@ public:
 // COMPLETE APM SYSTEM
 // ============================================================================
 
+namespace apm {
+
 class APMSystem {
 public:
     struct Config {
@@ -572,6 +574,68 @@ public:
     // Optional: expose config
     const Config& config() const { return config_; }
 
+    // Main processing pipeline (async)
+    std::future<std::vector<AudioFrame>> process_async(
+        const std::vector<AudioFrame>& microphone_array,
+        const AudioFrame& speaker_reference,
+        float target_direction_rad)
+    {
+        return std::async(std::launch::async,
+            [this, microphone_array, speaker_reference, target_direction_rad]() {
+
+                // Step 1: Beamforming
+                auto beamformed = beamformer_.delay_and_sum(
+                    microphone_array, target_direction_rad, 0.0f);
+
+                // Step 2: Echo cancellation
+                auto echo_cancelled = echo_canceller_.cancel_echo(
+                    beamformed, speaker_reference);
+
+                // Step 3: Noise suppression
+                auto denoised = noise_suppressor_.suppress(echo_cancelled);
+
+                // Step 4: Voice activity detection
+                auto vad_result = vad_.detect(denoised);
+                if (!vad_result.speech_detected) {
+                    return std::vector<AudioFrame>();
+                }
+
+                // Step 5: Translation
+                TranslationEngine::TranslationRequest trans_req;
+                trans_req.audio = denoised;
+                trans_req.source_lang = config_.source_language;
+                trans_req.target_lang = config_.target_language;
+
+                auto translation_future = translator_->translate_async(trans_req);
+                auto translation_result = translation_future.get();
+
+                // Step 6: Directional projection
+                auto projection_signals = projector_.create_projection_signals(
+                    translation_result.translated_audio,
+                    target_direction_rad,
+                    1.5f // 1.5m target distance
+                );
+
+                return projection_signals;
+            });
+    }
+
+    // Synchronous wrapper
+    std::vector<AudioFrame> process(
+        const std::vector<AudioFrame>& microphone_array,
+        const AudioFrame& speaker_reference,
+        float target_direction_rad)
+    {
+        return process_async(microphone_array, speaker_reference, target_direction_rad).get();
+    }
+
+    // Reset internal DSP state
+    void reset_all() {
+        echo_canceller_.reset();
+        noise_suppressor_.reset_state();
+        vad_.reset();
+    }
+
 private:
     BeamformingEngine beamformer_;
     NoiseSuppressionEngine noise_suppressor_;
@@ -583,61 +647,8 @@ private:
     Config config_;
 };
 
-public:
-    APMSystem(const Config& cfg = Config{})
-        : beamformer_(cfg.num_microphones, cfg.mic_spacing_m),
-          echo_canceller_(2048),
-          projector_(cfg.num_speakers, cfg.speaker_spacing_m),
-          translator_(std::make_unique<MockTranslationEngine>()),
-          config_(cfg) {}
-    
-    // Main processing pipeline
-    std::future<std::vector<AudioFrame>> process_async(
-        const std::vector<AudioFrame>& microphone_array,
-        const AudioFrame& speaker_reference,
-        float target_direction_rad) {
-        
-        return std::async(std::launch::async, 
-            [this, microphone_array, speaker_reference, target_direction_rad]() {
-            
-            // Step 1: Beamforming - focus on target direction
-            auto beamformed = beamformer_.delay_and_sum(
-                microphone_array, target_direction_rad, 0.0f);
-            
-            // Step 2: Echo cancellation
-            auto echo_cancelled = echo_canceller_.cancel_echo(
-                beamformed, speaker_reference);
-            
-            // Step 3: Noise suppression
-            auto denoised = noise_suppressor_.suppress(echo_cancelled);
-            
-            // Step 4: Voice activity detection
-            auto vad_result = vad_.detect(denoised);
-            
-            if (!vad_result.speech_detected) {
-                // No speech - return empty
-                return std::vector<AudioFrame>();
-            }
-            
-            // Step 5: Translation
-            TranslationEngine::TranslationRequest trans_req;
-            trans_req.audio = denoised;
-            trans_req.source_lang = config_.source_language;
-            trans_req.target_lang = config_.target_language;
-            
-            auto translation_future = translator_->translate_async(trans_req);
-            auto translation_result = translation_future.get();
-            
-            // Step 6: Directional projection
-            auto projection_signals = projector_.create_projection_signals(
-                translation_result.translated_audio,
-                target_direction_rad,
-                1.5f // 1.5m target distance
-            );
-            
-            return projection_signals;
-        });
-    }
+} // namespace apm
+
     
     // Synchronous version for simpler use cases
     std::vector<AudioFrame> process(

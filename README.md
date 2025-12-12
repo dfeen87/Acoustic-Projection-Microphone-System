@@ -346,15 +346,49 @@ Contributions welcome! Please:
 - Add unit tests for new features
 - Update documentation
 
-## Roadmap
+# APM System — What’s Next
 
-- [ ] Real-time GPU acceleration (CUDA)
-- [ ] Additional language models
-- [ ] Circular microphone array support
-- [ ] Bluetooth audio I/O
-- [ ] Web assembly port
-- [ ] Python bindings
-- [ ] iOS/Android support
+Now that the full APM pipeline builds cleanly in Docker and passes CI, the next phase begins. 
+This document outlines the upcoming milestones that will take the system from a validated prototype 
+to a production‑ready acoustic intelligence engine.
+
+## ✅ Completed Milestones
+- Full DSP pipeline integrated (beamforming → echo cancellation → noise suppression → VAD → translation → projection)
+- APMSystem orchestrator implemented and validated
+- Clean Docker build with reproducible environment
+- CI pipeline green across build and lint stages
+- Structural refactor: namespaces, constructors, class integrity
+
+## 🚀 Next Milestones
+
+### 1. Real Audio I/O
+- Integrate PortAudio or RtAudio
+- Add streaming mode (low‑latency pipeline)
+- Implement ring buffers for real‑time safety
+
+### 2. Translation Backend Upgrade
+- Replace mock engine with real ASR → NMT → TTS chain
+- Add async batching and caching
+- Add language presets
+
+### 3. DSP Optimization
+- SIMD acceleration (AVX2/AVX‑512)
+- FFT‑based beamforming path
+- Adaptive noise suppression tuning
+
+### 4. System Architecture
+- Split into headers/modules
+- Add unit tests + benchmarks
+- Add logging + profiling hooks
+
+### 5. Developer Experience
+- CLI tool for running APM locally
+- Config presets (conference, outdoor, whisper, broadcast)
+- Documentation + diagrams
+
+## 🌍 Vision
+APM becomes a real‑time, multilingual acoustic intelligence layer — 
+a foundation for communication, accessibility, and spatial computing.
 
 ## License
 

@@ -1,27 +1,48 @@
-docker:
-  runs-on: ubuntu-22.04
+# ============================
+# Stage 1 — Build environment
+# ============================
+FROM ubuntu:22.04 AS builder
 
-  steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    ninja-build \
+    libfftw3-dev \
+    libfftw3-single3 \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+# Set working directory
+WORKDIR /app
 
-    - name: Login to Docker Hub
-      if: github.event_name == 'release'
-      uses: docker/login-action@v3
-      with:
-        username: dfeen87
-        password: ${{ secrets.DOCKER_PASSWORD }}
+# Copy source code
+COPY . .
 
-    - name: Build Docker image
-      uses: docker/build-push-action@v6
-      with:
-        context: .
-        push: ${{ github.event_name == 'release' }}
-        tags: |
-          dfeen87/apm-system:latest
-          dfeen87/apm-system:${{ github.ref_name }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+# Configure and build
+RUN cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTS=OFF \
+    -DBUILD_BENCHMARKS=OFF \
+    && cmake --build build -j$(nproc)
+
+# ============================
+# Stage 2 — Runtime image
+# ============================
+FROM ubuntu:22.04 AS runtime
+
+# Install only runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libfftw3-dev \
+    libfftw3-single3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy built binary from builder stage
+COPY --from=builder /app/build/apm_system /app/apm_system
+
+# Default command
+CMD ["./apm_system"]
+

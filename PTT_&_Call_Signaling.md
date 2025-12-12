@@ -1,14 +1,24 @@
-# APM Push-to-Talk (PTT) & Call Signaling System
+# Push-to-Talk (PTT) & Call Signaling System
 
 ## Overview
 
-APM now includes a fully integrated Push‑to‑Talk controller and UDP‑based Call Signaling subsystem designed for real‑world communication workflows. These features enable intentional audio capture, walkie‑talkie style operation, incoming call notifications, session management, and network‑ready communication.
+This repository provides a fully integrated Push‑to‑Talk controller and UDP‑based Call Signaling subsystem designed for real‑world communication workflows. These features enable intentional audio capture, walkie‑talkie style operation, incoming call notifications, session management, and network‑ready communication.
 
 This document provides a complete overview of the architecture, features, usage, and integration details.
 
+## Table of Contents
+- [Push-to-Talk (PTT) Controller](#push-to-talk-ptt-controller)
+- [Call Signaling System](#call-signaling-system)
+- [Full Workflow Integration](#full-workflow-integration)
+- [Installation](#installation)
+- [Getting Started](#getting-started)
+- [API Reference](#api-reference)
+- [Contributing](#contributing)
+- [License](#license)
+
 ---
 
-# 🎙️ Push-to-Talk (PTT) Controller
+## Push-to-Talk (PTT) Controller
 
 The PTT Controller ensures that audio is only captured when the user intentionally transmits. This eliminates background noise, accidental recordings, and environmental interference.
 
@@ -126,6 +136,29 @@ PTT Press → Audio Capture → Whisper STT → NLLB Translation → Encryption 
 - `examples/ptt_call_example.cpp`
 
 **Total:** ~1,650 lines of production code
+
+---
+
+# 🔧 CMake Integration
+
+Add the following to your `CMakeLists.txt`:
+
+```cmake
+set(APM_CORE_SOURCES
+    src/apm_core.cpp
+    src/local_translation_engine.cpp
+    src/crypto.cpp
+    src/ptt_controller.cpp
+    src/call_signaling.cpp
+)
+
+if(BUILD_EXAMPLES)
+    add_executable(ptt_call_example examples/ptt_call_example.cpp)
+    target_link_libraries(ptt_call_example PRIVATE apm_core Threads::Threads)
+endif()
+```
+
+---
 
 # ✅ Summary
 

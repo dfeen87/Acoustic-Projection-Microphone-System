@@ -17,23 +17,23 @@ Status: Planning Phase
 | Translation Interface | ✅ Complete |
 | Docker Support | ✅ Complete |
 
-## 🗺️ Release Timeline
+## 🗺️ Release Timeline (Daily work - expedited versions)
 
-### Version 2.0 - Foundation (Q1 2025)
+### Version 2.0 - Foundation 
 - Real audio I/O (PortAudio/ALSA)
 - Streaming mode processor
 - Command-line interface
 - Configuration presets
 - Basic documentation
 
-### Version 2.5 - Intelligence (Q2 2025)
+### Version 2.5 - Intelligence
 - OpenAI Whisper integration
 - Google Cloud Speech/Translate
 - Performance profiling tools
 - Benchmarking suite
 - Advanced presets
 
-### Version 3.0 - Production (Q3 2025)
+### Version 3.0 - Production
 - Comprehensive test coverage (>80%)
 - Packaging (DEB/RPM/Homebrew)
 - Full API documentation (Doxygen)

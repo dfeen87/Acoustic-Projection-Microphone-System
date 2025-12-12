@@ -117,7 +117,7 @@ target_link_libraries(apm PRIVATE apm_core)
 
 if(BUILD_EXAMPLES)
     # Translation example - demonstrates full pipeline with real translation
-    if(ENABLE_LOCAL_TRANSLATION)
+    if(ENABLE_LOCAL_TRANSLATION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/translation_example.cpp)
         add_executable(translation_example examples/translation_example.cpp)
         target_link_libraries(translation_example PRIVATE apm_core Threads::Threads)
         target_include_directories(translation_example PRIVATE 
@@ -133,7 +133,7 @@ if(BUILD_EXAMPLES)
         message(STATUS "Building basic_example")
     endif()
     
-    message(STATUS "Examples enabled - will be built")
+    message(STATUS "Examples enabled")
 endif()
 
 # ============================================================================
@@ -173,7 +173,7 @@ if(BUILD_TESTING)
     add_test(NAME apm_core_test COMMAND apm_test)
     
     # Translation integration tests (if enabled)
-    if(ENABLE_LOCAL_TRANSLATION)
+    if(ENABLE_LOCAL_TRANSLATION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_translation_integration.cpp)
         add_executable(test_translation
             tests/test_translation_integration.cpp
         )
@@ -193,7 +193,7 @@ if(BUILD_TESTING)
         message(STATUS "Building translation integration tests")
     endif()
     
-    message(STATUS "Testing enabled - tests will be built")
+    message(STATUS "Testing enabled")
 endif()
 
 # ============================================================================
@@ -359,12 +359,12 @@ message(STATUS "Targets to Build:")
 message(STATUS "──────────────────────────────────────────────────────────")
 message(STATUS "  apm                  (main executable)")
 message(STATUS "  apm_core             (static library)")
-if(BUILD_EXAMPLES AND ENABLE_LOCAL_TRANSLATION)
+if(BUILD_EXAMPLES AND ENABLE_LOCAL_TRANSLATION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/translation_example.cpp)
     message(STATUS "  translation_example  (full pipeline demo)")
 endif()
 if(BUILD_TESTING)
     message(STATUS "  apm_test             (core tests)")
-    if(ENABLE_LOCAL_TRANSLATION)
+    if(ENABLE_LOCAL_TRANSLATION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_translation_integration.cpp)
         message(STATUS "  test_translation     (integration tests)")
     endif()
 endif()

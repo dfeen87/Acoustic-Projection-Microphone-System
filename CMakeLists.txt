@@ -10,6 +10,7 @@ option(BUILD_TESTING "Build tests" OFF)
 option(BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(ENABLE_TFLITE "Enable TensorFlow Lite translation engine" OFF)
 option(ENABLE_COVERAGE "Enable coverage reporting" OFF)
+option(ENABLE_LOCAL_TRANSLATION "Enable local Whisper+NLLB translation" ON)
 
 # Coverage support
 if(ENABLE_COVERAGE)
@@ -60,9 +61,17 @@ include_directories(
 )
 
 # Create a library with your APM core functionality
-add_library(apm_core STATIC
+set(APM_CORE_SOURCES
     src/apm_core.cpp
 )
+
+# Add local translation engine if enabled
+if(ENABLE_LOCAL_TRANSLATION)
+    list(APPEND APM_CORE_SOURCES src/local_translation_engine.cpp)
+    message(STATUS "Local translation enabled (Whisper + NLLB)")
+endif()
+
+add_library(apm_core STATIC ${APM_CORE_SOURCES})
 
 target_include_directories(apm_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -82,6 +91,11 @@ if(HAVE_TFLITE)
     target_include_directories(apm_core PUBLIC ${TFLITE_INCLUDE_DIR})
     target_link_libraries(apm_core PUBLIC ${TFLITE_LIBRARY})
     target_compile_definitions(apm_core PUBLIC HAVE_TFLITE=1)
+endif()
+
+# Add local translation flag if enabled
+if(ENABLE_LOCAL_TRANSLATION)
+    target_compile_definitions(apm_core PUBLIC HAVE_LOCAL_TRANSLATION=1)
 endif()
 
 # Main executable
@@ -136,3 +150,39 @@ install(TARGETS apm apm_core
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
+
+# Install Python translation bridge
+if(ENABLE_LOCAL_TRANSLATION)
+    install(FILES scripts/translation_bridge.py
+        DESTINATION share/apm/scripts
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+    )
+    install(FILES scripts/setup_translation.sh
+        DESTINATION share/apm/scripts
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+    )
+    install(FILES requirements-translation.txt
+        DESTINATION share/apm/
+    )
+endif()
+
+# Print configuration summary
+message(STATUS "")
+message(STATUS "=== APM System Configuration ===")
+message(STATUS "Version: ${PROJECT_VERSION}")
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "")
+message(STATUS "Features:")
+message(STATUS "  Testing: ${BUILD_TESTING}")
+message(STATUS "  Benchmarks: ${BUILD_BENCHMARKS}")
+message(STATUS "  Coverage: ${ENABLE_COVERAGE}")
+message(STATUS "  Local Translation: ${ENABLE_LOCAL_TRANSLATION}")
+message(STATUS "  TensorFlow Lite: ${HAVE_TFLITE}")
+if(FFTW3F_LIBRARY)
+    message(STATUS "  FFTW3: Yes")
+else()
+    message(STATUS "  FFTW3: No")
+endif()
+message(STATUS "================================")
+message(STATUS "")

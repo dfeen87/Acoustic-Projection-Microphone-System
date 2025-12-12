@@ -12,6 +12,7 @@ option(BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(ENABLE_TFLITE "Enable TensorFlow Lite translation engine" OFF)
 option(ENABLE_COVERAGE "Enable coverage reporting" OFF)
 option(ENABLE_LOCAL_TRANSLATION "Enable local Whisper+NLLB translation" ON)
+option(ENABLE_ENCRYPTION "Enable encryption support" ON)
 
 # Coverage support
 if(ENABLE_COVERAGE)
@@ -48,6 +49,23 @@ else()
     set(HAVE_TFLITE OFF)
 endif()
 
+# Libsodium (for encryption)
+if(ENABLE_ENCRYPTION)
+    find_library(SODIUM_LIBRARY NAMES sodium)
+    find_path(SODIUM_INCLUDE_DIR NAMES sodium.h)
+    
+    if(SODIUM_LIBRARY AND SODIUM_INCLUDE_DIR)
+        set(HAVE_ENCRYPTION ON)
+        message(STATUS "Libsodium found - encryption enabled")
+    else()
+        set(HAVE_ENCRYPTION OFF)
+        message(WARNING "Libsodium not found - encryption disabled")
+        message(WARNING "Install: apt-get install libsodium-dev (Ubuntu) or brew install libsodium (macOS)")
+    endif()
+else()
+    set(HAVE_ENCRYPTION OFF)
+endif()
+
 # Generate config header
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/include/apm/config.h.in"
@@ -66,6 +84,12 @@ set(APM_CORE_SOURCES
 if(ENABLE_LOCAL_TRANSLATION)
     list(APPEND APM_CORE_SOURCES src/local_translation_engine.cpp)
     message(STATUS "Local translation enabled (Whisper + NLLB)")
+endif()
+
+# Add encryption if enabled
+if(HAVE_ENCRYPTION)
+    list(APPEND APM_CORE_SOURCES src/crypto.cpp)
+    message(STATUS "Encryption module enabled")
 endif()
 
 add_library(apm_core STATIC ${APM_CORE_SOURCES})
@@ -94,6 +118,13 @@ if(HAVE_TFLITE)
     message(STATUS "TensorFlow Lite found and linked")
 endif()
 
+# Optional: link libsodium if present
+if(HAVE_ENCRYPTION)
+    target_include_directories(apm_core PUBLIC ${SODIUM_INCLUDE_DIR})
+    target_link_libraries(apm_core PUBLIC ${SODIUM_LIBRARY})
+    target_compile_definitions(apm_core PUBLIC HAVE_ENCRYPTION=1)
+endif()
+
 # Add local translation flag if enabled
 if(ENABLE_LOCAL_TRANSLATION)
     target_compile_definitions(apm_core PUBLIC HAVE_LOCAL_TRANSLATION=1)
@@ -116,6 +147,13 @@ if(BUILD_EXAMPLES)
         add_executable(translation_example examples/translation_example.cpp)
         target_link_libraries(translation_example PRIVATE apm_core Threads::Threads)
         message(STATUS "Building translation_example")
+    endif()
+    
+    # Encrypted translation example
+    if(HAVE_ENCRYPTION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/encrypted_translation_example.cpp)
+        add_executable(encrypted_translation_example examples/encrypted_translation_example.cpp)
+        target_link_libraries(encrypted_translation_example PRIVATE apm_core Threads::Threads)
+        message(STATUS "Building encrypted_translation_example")
     endif()
     
     # Basic APM example (if you have one)
@@ -163,6 +201,23 @@ if(BUILD_TESTING)
     )
     
     add_test(NAME apm_core_test COMMAND apm_test)
+    
+    # Crypto tests (if enabled)
+    if(HAVE_ENCRYPTION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_crypto.cpp)
+        add_executable(crypto_test
+            tests/test_crypto.cpp
+        )
+        
+        target_link_libraries(crypto_test
+            PRIVATE
+            apm_core
+            GTest::gtest
+            GTest::gtest_main
+        )
+        
+        add_test(NAME crypto_test COMMAND crypto_test)
+        message(STATUS "Building crypto tests")
+    endif()
     
     # Translation integration tests (if enabled)
     if(ENABLE_LOCAL_TRANSLATION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_translation_integration.cpp)
@@ -258,7 +313,7 @@ install(FILES
 )
 
 # Install additional docs if they exist
-foreach(doc BUILD.md ROADMAP.md TRANSLATOR_QUICKSTART.md TRANSLATION_BRIDGE.md)
+foreach(doc BUILD.md ROADMAP.md TRANSLATOR_QUICKSTART.md TRANSLATION_BRIDGE.md ENCRYPTION.md)
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${doc})
         install(FILES ${doc} DESTINATION share/doc/apm)
     endif()
@@ -340,6 +395,10 @@ message(STATUS "  Local Translation:   ${ENABLE_LOCAL_TRANSLATION}")
 if(ENABLE_LOCAL_TRANSLATION)
     message(STATUS "    ↳ Whisper + NLLB (200+ languages)")
 endif()
+message(STATUS "  Encryption:          ${HAVE_ENCRYPTION}")
+if(HAVE_ENCRYPTION)
+    message(STATUS "    ↳ ChaCha20-Poly1305 + X25519")
+endif()
 message(STATUS "  TensorFlow Lite:     ${HAVE_TFLITE}")
 if(FFTW3F_LIBRARY)
     message(STATUS "  FFTW3:               Yes")
@@ -355,21 +414,37 @@ message(STATUS "  apm_core             (static library)")
 if(BUILD_EXAMPLES AND ENABLE_LOCAL_TRANSLATION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/translation_example.cpp)
     message(STATUS "  translation_example  (full pipeline demo)")
 endif()
+if(BUILD_EXAMPLES AND HAVE_ENCRYPTION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/encrypted_translation_example.cpp)
+    message(STATUS "  encrypted_translation_example  (secure communications)")
+endif()
 if(BUILD_TESTING)
     message(STATUS "  apm_test             (core tests)")
+    if(HAVE_ENCRYPTION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_crypto.cpp)
+        message(STATUS "  crypto_test          (encryption tests)")
+    endif()
     if(ENABLE_LOCAL_TRANSLATION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_translation_integration.cpp)
         message(STATUS "  test_translation     (integration tests)")
     endif()
 endif()
 message(STATUS "")
-if(ENABLE_LOCAL_TRANSLATION)
+if(ENABLE_LOCAL_TRANSLATION OR HAVE_ENCRYPTION)
     message(STATUS "──────────────────────────────────────────────────────────")
     message(STATUS "Next Steps:")
     message(STATUS "──────────────────────────────────────────────────────────")
     message(STATUS "  1. Build: cmake --build . -j$(nproc)")
-    message(STATUS "  2. Setup translation: ./scripts/setup_translation.sh")
-    message(STATUS "  3. Test: ./test_translation")
-    message(STATUS "  4. Run: ./translation_example")
+    if(ENABLE_LOCAL_TRANSLATION)
+        message(STATUS "  2. Setup translation: ./scripts/setup_translation.sh")
+    endif()
+    if(BUILD_TESTING)
+        message(STATUS "  3. Run tests: ctest --output-on-failure")
+    endif()
+    if(BUILD_EXAMPLES)
+        if(HAVE_ENCRYPTION)
+            message(STATUS "  4. Try: ./encrypted_translation_example")
+        else()
+            message(STATUS "  4. Try: ./translation_example")
+        endif()
+    endif()
     message(STATUS "")
 endif()
 message(STATUS "════════════════════════════════════════════════════════════")

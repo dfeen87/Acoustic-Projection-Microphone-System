@@ -1,20 +1,100 @@
-# Local Translation Dependencies
+# APM System - Local Translation Dependencies
 # 100% local processing - no cloud APIs required
+# Install with: pip install -r requirements-translation.txt
 
-# Whisper for speech recognition
-openai-whisper>=20231117
+# ============================================================================
+# CORE DEPENDENCIES
+# ============================================================================
+
+# PyTorch (CPU version - for GPU, see instructions below)
 torch>=2.0.0
 torchaudio>=2.0.0
 
-# NLLB for translation
+# Whisper for speech recognition (OpenAI)
+openai-whisper>=20231117
+
+# NLLB for translation (Meta, 200+ languages)
 transformers>=4.30.0
 sentencepiece>=0.1.99
 protobuf>=3.20.0
 
-# Audio processing
+# Audio and numerical processing
 numpy>=1.24.0
 scipy>=1.10.0
 
-# Optional: Faster inference
-# accelerate>=0.20.0  # For optimized loading
-# bitsandbytes>=0.41.0  # For 8-bit quantization
+# ============================================================================
+# OPTIONAL: GPU ACCELERATION (CUDA)
+# ============================================================================
+# For 2-3x faster translation, install PyTorch with CUDA support:
+#
+# CUDA 11.8:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+#
+# CUDA 12.1:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+#
+# Check CUDA version: nvidia-smi
+# Verify installation: python3 -c "import torch; print(torch.cuda.is_available())"
+
+# ============================================================================
+# OPTIONAL: PERFORMANCE OPTIMIZATIONS
+# ============================================================================
+# Uncomment these for faster inference and lower memory usage:
+
+# Accelerate - Optimized model loading and inference
+# accelerate>=0.20.0
+
+# BitsAndBytes - 8-bit quantization for lower memory usage
+# bitsandbytes>=0.41.0
+
+# FlashAttention - Faster attention mechanism (requires CUDA)
+# flash-attn>=2.0.0
+
+# ============================================================================
+# OPTIONAL: DEVELOPMENT TOOLS
+# ============================================================================
+# Uncomment for development and testing:
+
+# Testing framework
+# pytest>=7.4.0
+
+# Code formatting
+# black>=23.0.0
+
+# Linting
+# flake8>=6.0.0
+# pylint>=2.17.0
+
+# Type checking
+# mypy>=1.4.0
+
+# ============================================================================
+# INSTALLATION NOTES
+# ============================================================================
+# 
+# Quick install (CPU):
+#   python3 -m venv venv
+#   source venv/bin/activate
+#   pip install -r requirements-translation.txt
+#
+# Quick install (GPU with CUDA 11.8):
+#   python3 -m venv venv
+#   source venv/bin/activate
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+#   pip install -r requirements-translation.txt
+#
+# Verify installation:
+#   python3 -c "import whisper; import transformers; print('Success!')"
+#
+# Model download sizes:
+#   Whisper (small): ~244 MB
+#   NLLB (distilled): ~1.2 GB
+#   Total: ~1.5 GB
+#
+# Memory requirements:
+#   CPU: 4GB RAM minimum, 8GB recommended
+#   GPU: 4GB VRAM minimum, 8GB recommended
+#
+# For more information, see:
+#   - TRANSLATOR_QUICKSTART.md
+#   - TRANSLATION_BRIDGE.md

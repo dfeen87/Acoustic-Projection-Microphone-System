@@ -359,7 +359,7 @@ to a production‑ready acoustic intelligence engine.
 - CI pipeline green across build and lint stages
 - Structural refactor: namespaces, constructors, class integrity
 
-## 🚀 Next Milestones
+## 🚀 Next Milestones - Will be continuously updated for this Repo is an ongoing project, details are in ROADMAP.md!
 
 ### 1. Real Audio I/O
 - Integrate PortAudio or RtAudio

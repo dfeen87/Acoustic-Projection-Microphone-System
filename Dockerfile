@@ -41,7 +41,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy built binary from builder stage
-COPY --from=builder /app/build/apm_system /app/apm_system
+COPY --from=builder /app/build/apm /app/apm
 
 # Default command
 CMD ["./apm_system"]

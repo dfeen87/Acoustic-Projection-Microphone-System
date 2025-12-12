@@ -6,7 +6,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Build options
+option(BUILD_TESTING "Build tests" OFF)
+option(BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(ENABLE_TFLITE "Enable TensorFlow Lite translation engine" OFF)
+option(ENABLE_COVERAGE "Enable coverage reporting" OFF)
+
+# Coverage support
+if(ENABLE_COVERAGE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        message(STATUS "Coverage reporting enabled")
+        add_compile_options(--coverage -fprofile-arcs -ftest-coverage)
+        add_link_options(--coverage)
+    else()
+        message(WARNING "Coverage only supported with GCC/Clang")
+    endif()
+endif()
 
 # Compiler warnings
 if(MSVC)
@@ -63,3 +77,51 @@ if(HAVE_TFLITE)
     target_link_libraries(apm PRIVATE ${TFLITE_LIBRARY})
     target_compile_definitions(apm PRIVATE HAVE_TFLITE=1)
 endif()
+
+# Testing
+if(BUILD_TESTING)
+    enable_testing()
+    
+    # Find GTest
+    find_package(GTest)
+    
+    if(NOT GTest_FOUND)
+        # Fetch GTest if not found
+        include(FetchContent)
+        FetchContent_Declare(
+            googletest
+            GIT_REPOSITORY https://github.com/google/googletest.git
+            GIT_TAG        v1.14.0
+        )
+        # For Windows: Prevent overriding the parent project's compiler/linker settings
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(googletest)
+    endif()
+    
+    # Create a simple test to verify coverage works
+    add_executable(apm_test
+        tests/test_main.cpp
+    )
+    
+    target_link_libraries(apm_test
+        PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        Threads::Threads
+    )
+    
+    # Add test to CTest
+    add_test(NAME apm_test COMMAND apm_test)
+    
+    message(STATUS "Testing enabled - tests will be built")
+endif()
+
+# Benchmarks
+if(BUILD_BENCHMARKS)
+    message(STATUS "Benchmarks enabled - will be built when benchmark code is added")
+endif()
+
+# Installation
+install(TARGETS apm
+    RUNTIME DESTINATION bin
+)

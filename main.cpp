@@ -563,11 +563,18 @@ public:
         std::string target_language = "es-ES";
     };
 
-    // Main constructor - default argument removed, implementation below
-    explicit APMSystem(const Config& cfg);
-    
-    // Convenience default constructor
+    // Default constructor
     APMSystem() : APMSystem(Config{}) {}
+    
+    // Main constructor - defined after Config is complete
+    explicit APMSystem(const Config& cfg)
+        : beamformer_(cfg.num_microphones, cfg.mic_spacing_m),
+          noise_suppressor_(),
+          echo_canceller_(2048),
+          vad_(),
+          projector_(cfg.num_speakers, cfg.speaker_spacing_m),
+          translator_(std::make_unique<MockTranslationEngine>()),
+          config_(cfg) {}
 
     // Expose config
     const Config& config() const { return config_; }

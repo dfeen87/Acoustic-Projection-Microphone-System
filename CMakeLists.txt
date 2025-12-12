@@ -54,13 +54,6 @@ configure_file(
     "${CMAKE_CURRENT_BINARY_DIR}/include/apm/config.h"
 )
 
-# Include directories
-include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_BINARY_DIR}/include
-)
-
 # ============================================================================
 # APM CORE LIBRARY
 # ============================================================================
@@ -77,9 +70,11 @@ endif()
 
 add_library(apm_core STATIC ${APM_CORE_SOURCES})
 
+# FIXED: Use generator expressions for proper build/install interface
 target_include_directories(apm_core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_BINARY_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+    $<INSTALL_INTERFACE:include>
 )
 
 target_link_libraries(apm_core PUBLIC Threads::Threads)
@@ -120,9 +115,6 @@ if(BUILD_EXAMPLES)
     if(ENABLE_LOCAL_TRANSLATION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/translation_example.cpp)
         add_executable(translation_example examples/translation_example.cpp)
         target_link_libraries(translation_example PRIVATE apm_core Threads::Threads)
-        target_include_directories(translation_example PRIVATE 
-            ${CMAKE_CURRENT_SOURCE_DIR}/include
-        )
         message(STATUS "Building translation_example")
     endif()
     
@@ -182,10 +174,6 @@ if(BUILD_TESTING)
             PRIVATE
             apm_core
             Threads::Threads
-        )
-        
-        target_include_directories(test_translation PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/include
         )
         
         add_test(NAME translation_integration_test COMMAND test_translation)

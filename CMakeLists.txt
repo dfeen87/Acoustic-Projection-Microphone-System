@@ -103,6 +103,9 @@ target_include_directories(apm_core PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
+# Allow includes from project root (for apm_system.h)
+include_directories(${CMAKE_SOURCE_DIR})
+
 target_link_libraries(apm_core PUBLIC Threads::Threads)
 
 # Optional: link FFTW if present

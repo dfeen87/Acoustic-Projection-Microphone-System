@@ -59,24 +59,34 @@ include_directories(
     ${CMAKE_CURRENT_BINARY_DIR}/include
 )
 
-# Main executable (only file you currently have)
-add_executable(apm main.cpp)
+# Create a library with your APM core functionality
+add_library(apm_core STATIC
+    src/apm_core.cpp
+)
 
-# Link libraries (only threads for now)
-target_link_libraries(apm PRIVATE Threads::Threads)
+target_include_directories(apm_core PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_BINARY_DIR}/include
+)
+
+target_link_libraries(apm_core PUBLIC Threads::Threads)
 
 # Optional: link FFTW if present
 if(FFTW3F_LIBRARY AND FFTW3_INCLUDE_DIR)
-    target_include_directories(apm PRIVATE ${FFTW3_INCLUDE_DIR})
-    target_link_libraries(apm PRIVATE ${FFTW3F_LIBRARY})
+    target_include_directories(apm_core PUBLIC ${FFTW3_INCLUDE_DIR})
+    target_link_libraries(apm_core PUBLIC ${FFTW3F_LIBRARY})
 endif()
 
 # Optional: link TFLite if present
 if(HAVE_TFLITE)
-    target_include_directories(apm PRIVATE ${TFLITE_INCLUDE_DIR})
-    target_link_libraries(apm PRIVATE ${TFLITE_LIBRARY})
-    target_compile_definitions(apm PRIVATE HAVE_TFLITE=1)
+    target_include_directories(apm_core PUBLIC ${TFLITE_INCLUDE_DIR})
+    target_link_libraries(apm_core PUBLIC ${TFLITE_LIBRARY})
+    target_compile_definitions(apm_core PUBLIC HAVE_TFLITE=1)
 endif()
+
+# Main executable
+add_executable(apm main.cpp)
+target_link_libraries(apm PRIVATE apm_core)
 
 # Testing
 if(BUILD_TESTING)
@@ -93,21 +103,20 @@ if(BUILD_TESTING)
             GIT_REPOSITORY https://github.com/google/googletest.git
             GIT_TAG        v1.14.0
         )
-        # For Windows: Prevent overriding the parent project's compiler/linker settings
         set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(googletest)
     endif()
     
-    # Create a simple test to verify coverage works
+    # Test executable
     add_executable(apm_test
-        tests/test_main.cpp
+        tests/test_apm_core.cpp
     )
     
     target_link_libraries(apm_test
         PRIVATE
+        apm_core
         GTest::gtest
         GTest::gtest_main
-        Threads::Threads
     )
     
     # Add test to CTest
@@ -122,6 +131,8 @@ if(BUILD_BENCHMARKS)
 endif()
 
 # Installation
-install(TARGETS apm
+install(TARGETS apm apm_core
     RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
 )

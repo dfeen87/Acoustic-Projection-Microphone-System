@@ -41,6 +41,10 @@ class AudioFrame {
     AudioMetadata metadata_;
 
 public:
+    // DEFAULT CONSTRUCTOR - THIS WAS MISSING
+    AudioFrame() : sample_rate_(0), channels_(0) {}
+    
+    // PARAMETERIZED CONSTRUCTOR
     AudioFrame(size_t samples, int sr, int ch) 
         : data_(samples * ch), sample_rate_(sr), channels_(ch) {
         metadata_.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -544,10 +548,8 @@ public:
 };
 
 // ============================================================================
-// COMPLETE APM SYSTEM
+// COMPLETE APM SYSTEM - ALL METHODS INSIDE THE CLASS
 // ============================================================================
-
-namespace apm {
 
 class APMSystem {
 public:
@@ -571,7 +573,7 @@ public:
           translator_(std::make_unique<MockTranslationEngine>()),
           config_(cfg) {}
 
-    // Optional: expose config
+    // Expose config
     const Config& config() const { return config_; }
 
     // Main processing pipeline (async)
@@ -620,16 +622,16 @@ public:
             });
     }
 
-    // Synchronous wrapper
+    // Synchronous version for simpler use cases - NOW INSIDE THE CLASS
     std::vector<AudioFrame> process(
         const std::vector<AudioFrame>& microphone_array,
         const AudioFrame& speaker_reference,
-        float target_direction_rad)
-    {
+        float target_direction_rad) {
+        
         return process_async(microphone_array, speaker_reference, target_direction_rad).get();
     }
-
-    // Reset internal DSP state
+    
+    // Reset internal DSP state - NOW INSIDE THE CLASS
     void reset_all() {
         echo_canceller_.reset();
         noise_suppressor_.reset_state();
@@ -643,30 +645,10 @@ private:
     VoiceActivityDetector vad_;
     DirectionalProjector projector_;
     std::unique_ptr<TranslationEngine> translator_;
-
     Config config_;
 };
 
-} // namespace apm
-
-    
-    // Synchronous version for simpler use cases
-    std::vector<AudioFrame> process(
-        const std::vector<AudioFrame>& microphone_array,
-        const AudioFrame& speaker_reference,
-        float target_direction_rad) {
-        
-        return process_async(microphone_array, speaker_reference, target_direction_rad).get();
-    }
-    
-    void reset_all() {
-        echo_canceller_.reset();
-        noise_suppressor_.reset_state();
-        vad_.reset();
-    }
-};
-
-} // namespace apm
+} // namespace apm - ONLY CLOSE ONCE
 
 // ============================================================================
 // USAGE EXAMPLE

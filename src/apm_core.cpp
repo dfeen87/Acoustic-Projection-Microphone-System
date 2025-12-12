@@ -61,7 +61,8 @@ void AudioFrame::compute_metadata() {
 
     metadata_.peak_db = 20.0f * std::log10(peak + 1e-10f);
     metadata_.rms_db = 10.0f * std::log10(sum_sq / data_.size() + 1e-10f);
-    metadata_.clipping = (peak >= 1.0f);
+    metadata_.clipping = (peak > 1.0f);
+
 }
 
 // ============================================================================

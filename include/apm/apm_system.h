@@ -6,6 +6,8 @@
 #include <string>
 #include <future>
 #include <memory>
+#include <numeric>
+#include <algorithm>
 
 namespace apm {
 
@@ -14,7 +16,7 @@ namespace apm {
 // ============================================================================
 
 struct AudioMetadata {
-    std::chrono::microseconds timestamp;
+    std::chrono::microseconds timestamp{};
     float peak_db{-96.0f};
     float rms_db{-96.0f};
     float snr_db{0.0f};
@@ -31,6 +33,9 @@ class AudioFrame {
     AudioMetadata metadata_;
 
 public:
+    // ✅ Default constructor required for TranslationRequest/Result
+    AudioFrame() : data_(), sample_rate_(0), channels_(0), metadata_{} {}
+
     AudioFrame(size_t samples, int sr, int ch);
 
     std::span<float> samples();
@@ -155,14 +160,20 @@ public:
         std::string source_lang;
         std::string target_lang;
         std::vector<std::string> context_history;
+
+        // ✅ Default constructor required
+        TranslationRequest() = default;
     };
 
     struct TranslationResult {
         AudioFrame translated_audio;
         std::string source_text;
         std::string translated_text;
-        float confidence;
-        int latency_ms;
+        float confidence{0.0f};
+        int latency_ms{0};
+
+        // ✅ Default constructor required
+        TranslationResult() = default;
     };
 
     virtual std::future<TranslationResult> translate_async(
@@ -200,13 +211,6 @@ public:
 // ============================================================================
 
 class APMSystem {
-    BeamformingEngine beamformer_;
-    NoiseSuppressionEngine noise_suppressor_;
-    EchoCancellationEngine echo_canceller_;
-    VoiceActivityDetector vad_;
-    DirectionalProjector projector_;
-    std::unique_ptr<TranslationEngine> translator_;
-
 public:
     struct Config {
         int num_microphones = 4;
@@ -220,9 +224,19 @@ public:
 
 private:
     Config config_;
+    BeamformingEngine beamformer_;
+    NoiseSuppressionEngine noise_suppressor_;
+    EchoCancellationEngine echo_canceller_;
+    VoiceActivityDetector vad_;
+    DirectionalProjector projector_;
+    std::unique_ptr<TranslationEngine> translator_;
 
 public:
-    explicit APMSystem(const Config& cfg = Config{});
+    // ✅ Remove invalid default argument
+    explicit APMSystem(const Config& cfg);
+
+    // ✅ Add default constructor
+    APMSystem();
 
     std::future<std::vector<AudioFrame>> process_async(
         const std::vector<AudioFrame>& microphone_array,

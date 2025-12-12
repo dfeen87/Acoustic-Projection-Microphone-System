@@ -78,6 +78,8 @@ configure_file(
 
 set(APM_CORE_SOURCES
     src/apm_core.cpp
+    src/ptt_controller.cpp
+    src/call_signaling.cpp
 )
 
 # Add local translation engine if enabled
@@ -154,6 +156,13 @@ if(BUILD_EXAMPLES)
         add_executable(encrypted_translation_example examples/encrypted_translation_example.cpp)
         target_link_libraries(encrypted_translation_example PRIVATE apm_core Threads::Threads)
         message(STATUS "Building encrypted_translation_example")
+    endif()
+    
+    # PTT + Call Signaling example
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/ptt_call_example.cpp)
+        add_executable(ptt_call_example examples/ptt_call_example.cpp)
+        target_link_libraries(ptt_call_example PRIVATE apm_core Threads::Threads)
+        message(STATUS "Building ptt_call_example")
     endif()
     
     # Basic APM example (if you have one)
@@ -236,6 +245,23 @@ if(BUILD_TESTING)
         message(STATUS "Building translation integration tests")
     endif()
     
+    # PTT + Call Signaling tests
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ptt_signaling.cpp)
+        add_executable(ptt_signaling_test
+            tests/test_ptt_signaling.cpp
+        )
+        
+        target_link_libraries(ptt_signaling_test
+            PRIVATE
+            apm_core
+            GTest::gtest
+            GTest::gtest_main
+        )
+        
+        add_test(NAME ptt_signaling_test COMMAND ptt_signaling_test)
+        message(STATUS "Building PTT and Call Signaling tests")
+    endif()
+    
     message(STATUS "Testing enabled")
 endif()
 
@@ -313,7 +339,7 @@ install(FILES
 )
 
 # Install additional docs if they exist
-foreach(doc BUILD.md ROADMAP.md TRANSLATOR_QUICKSTART.md TRANSLATION_BRIDGE.md ENCRYPTION.md)
+foreach(doc BUILD.md ROADMAP.md TRANSLATOR_QUICKSTART.md TRANSLATION_BRIDGE.md ENCRYPTION.md PTT_CALL_SIGNALING.md)
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${doc})
         install(FILES ${doc} DESTINATION share/doc/apm)
     endif()
@@ -399,6 +425,8 @@ message(STATUS "  Encryption:          ${HAVE_ENCRYPTION}")
 if(HAVE_ENCRYPTION)
     message(STATUS "    ↳ ChaCha20-Poly1305 + X25519")
 endif()
+message(STATUS "  PTT & Signaling:     Yes")
+message(STATUS "    ↳ Push-to-Talk + UDP Call Signaling")
 message(STATUS "  TensorFlow Lite:     ${HAVE_TFLITE}")
 if(FFTW3F_LIBRARY)
     message(STATUS "  FFTW3:               Yes")
@@ -417,6 +445,9 @@ endif()
 if(BUILD_EXAMPLES AND HAVE_ENCRYPTION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/encrypted_translation_example.cpp)
     message(STATUS "  encrypted_translation_example  (secure communications)")
 endif()
+if(BUILD_EXAMPLES AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/ptt_call_example.cpp)
+    message(STATUS "  ptt_call_example     (PTT & call signaling demo)")
+endif()
 if(BUILD_TESTING)
     message(STATUS "  apm_test             (core tests)")
     if(HAVE_ENCRYPTION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_crypto.cpp)
@@ -424,6 +455,9 @@ if(BUILD_TESTING)
     endif()
     if(ENABLE_LOCAL_TRANSLATION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_translation_integration.cpp)
         message(STATUS "  test_translation     (integration tests)")
+    endif()
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ptt_signaling.cpp)
+        message(STATUS "  ptt_signaling_test   (PTT & signaling tests)")
     endif()
 endif()
 message(STATUS "")

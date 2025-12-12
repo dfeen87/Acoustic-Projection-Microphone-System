@@ -3,7 +3,7 @@
 // Main orchestrator for the APM system
 // ============================================================================
 
-#include "apm_system.h"
+#include "apm/apm_system.h"
 #include <iostream>
 #include <algorithm>
 #include <cmath>

@@ -1,0 +1,33 @@
+@PACKAGE_INIT@
+
+# APM System Package Configuration
+# Version @PROJECT_VERSION@
+
+include(CMakeFindDependencyMacro)
+
+# Required dependencies
+find_dependency(Threads REQUIRED)
+
+# Optional dependencies
+find_package(FFTW3 QUIET)
+
+# Check if local translation is enabled
+set(APM_HAS_LOCAL_TRANSLATION @ENABLE_LOCAL_TRANSLATION@)
+set(APM_HAS_TFLITE @HAVE_TFLITE@)
+
+# Include targets
+if(NOT TARGET APM::apm_core)
+    include("${CMAKE_CURRENT_LIST_DIR}/APMTargets.cmake")
+endif()
+
+# Provide variables
+set(APM_LIBRARIES APM::apm_core)
+set(APM_INCLUDE_DIRS "@PACKAGE_CMAKE_INSTALL_PREFIX@/include")
+set(APM_VERSION "@PROJECT_VERSION@")
+
+# Feature flags
+set(APM_LOCAL_TRANSLATION_ENABLED @ENABLE_LOCAL_TRANSLATION@)
+set(APM_TFLITE_ENABLED @HAVE_TFLITE@)
+
+# Check that all required components are present
+check_required_components(APM)

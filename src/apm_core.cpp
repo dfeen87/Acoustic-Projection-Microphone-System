@@ -277,25 +277,35 @@ AudioFrame EchoCancellationEngine::cancel_echo(
             reference_buffer_.pop_back();
         }
         
-        float echo_estimate = 0.0f;
-        for (size_t j = 0; j < std::min(filter_length_, reference_buffer_.size()); ++j) {
-            echo_estimate += adaptive_weights_[j] * reference_buffer_[j];
-        }
-        
-        float error = mic_samples[i] - echo_estimate;
-        out_samples[i] = error;
-        
-        float ref_power = 0.0f;
-        for (float r : reference_buffer_) {
-            ref_power += r * r;
-        }
-        ref_power = std::max(ref_power, 1e-6f);
-        
-        float step = mu_ * error / ref_power;
-        for (size_t j = 0; j < std::min(filter_length_, reference_buffer_.size()); ++j) {
-            adaptive_weights_[j] += step * reference_buffer_[j];
-        }
-    }
+      float echo_estimate = 0.0f;
+
+// Use size_t for both sides of std::min
+size_t limit = std::min(
+    static_cast<size_t>(filter_length_),
+    reference_buffer_.size()
+);
+
+for (size_t j = 0; j < limit; ++j) {
+    echo_estimate += adaptive_weights_[j] * reference_buffer_[j];
+}
+
+float error = mic_samples[i] - echo_estimate;
+out_samples[i] = error;
+
+// Compute reference power
+float ref_power = 0.0f;
+for (float r : reference_buffer_) {
+    ref_power += r * r;
+}
+ref_power = std::max(ref_power, 1e-6f);
+
+// LMS update step
+float step = mu_ * error / ref_power;
+
+for (size_t j = 0; j < limit; ++j) {
+    adaptive_weights_[j] += step * reference_buffer_[j];
+}
+
     
     output.compute_metadata();
     return output;

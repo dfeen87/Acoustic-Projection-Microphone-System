@@ -111,6 +111,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        submodules: recursive
     
     - name: Install dependencies
       run: |
@@ -125,20 +127,31 @@ jobs:
       run: |
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Debug \
-          -DENABLE_COVERAGE=ON \
-          -DBUILD_TESTS=ON
+          -DBUILD_TESTS=ON \
+          -DCMAKE_CXX_FLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+          -DCMAKE_C_FLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+          -DCMAKE_EXE_LINKER_FLAGS="--coverage"
     
     - name: Build
       run: cmake --build build -j$(nproc)
     
-    - name: Run tests
+    - name: Run tests to generate coverage data
       working-directory: build
-      run: ctest --output-on-failure
+      run: ctest --output-on-failure --verbose
+    
+    - name: Verify coverage files exist
+      run: |
+        echo "Checking for .gcda files..."
+        find build -name "*.gcda" -type f
+        if [ -z "$(find build -name '*.gcda' -type f)" ]; then
+          echo "ERROR: No .gcda files found!"
+          exit 1
+        fi
     
     - name: Generate coverage report
       run: |
         lcov --capture --directory build --output-file coverage.info
-        lcov --remove coverage.info '/usr/*' '*/tests/*' '*/external/*' --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' '*/tests/*' '*/external/*' '*/build/_deps/*' --output-file coverage.info
         lcov --list coverage.info
     
     - name: Upload coverage to Codecov
@@ -148,6 +161,7 @@ jobs:
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
+        verbose: true
 
   # Static analysis
   static-analysis:

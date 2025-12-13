@@ -390,7 +390,7 @@ For issues and questions:
 - GitHub Discussion Board
 - Email: dfeen87@gmail.com
 
-## Credits
+## Credits 
 
 - Original Author: Don Michael Feeney Jr.
 - Dedicated to: Marcel Krüger

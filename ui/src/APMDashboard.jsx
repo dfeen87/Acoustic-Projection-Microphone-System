@@ -17,16 +17,64 @@ export default function APMDashboard() {
     "peer-" + Math.random().toString(36).slice(2)
   );
 
+  // -------------------------
+  // Audio
+  // -------------------------
+  const audioStreamRef = useRef(null);
+  const audioElementRef = useRef(null);
+
   const appendLog = (msg) =>
-    setLog((prev) => [...prev.slice(-20), msg]);
+    setLog((prev) => [...prev.slice(-30), msg]);
+
+  // -------------------------
+  // Audio lifecycle
+  // -------------------------
+  const startAudio = async () => {
+    if (audioStreamRef.current) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      audioStreamRef.current = stream;
+
+      // Local monitoring (muted to avoid feedback)
+      const audioEl = document.createElement("audio");
+      audioEl.srcObject = stream;
+      audioEl.autoplay = true;
+      audioEl.muted = true;
+      audioElementRef.current = audioEl;
+
+      appendLog("audio capture started");
+    } catch (err) {
+      appendLog("audio error: " + err.message);
+    }
+  };
+
+  const stopAudio = () => {
+    if (!audioStreamRef.current) return;
+
+    audioStreamRef.current.getTracks().forEach((t) => t.stop());
+    audioStreamRef.current = null;
+    audioElementRef.current = null;
+
+    appendLog("audio capture stopped");
+  };
 
   // -------------------------
   // Start Call
   // -------------------------
-  const initiateCall = () => {
+  const initiateCall = async () => {
     const newSessionId = "session-" + Date.now();
     setSessionId(newSessionId);
     setStatus("calling");
+
+    await startAudio();
 
     if (!signalingRef.current) {
       signalingRef.current = new WSSignalingClient(
@@ -90,6 +138,7 @@ export default function APMDashboard() {
   const cleanupCall = () => {
     signalingRef.current?.disconnect();
     signalingRef.current = null;
+    stopAudio();
     setSessionId(null);
     setStatus("idle");
     appendLog("call cleanup complete");
@@ -101,6 +150,7 @@ export default function APMDashboard() {
   useEffect(() => {
     return () => {
       signalingRef.current?.disconnect();
+      stopAudio();
     };
   }, []);
 
@@ -142,12 +192,12 @@ export default function APMDashboard() {
       </div>
 
       <div style={{ marginTop: 24 }}>
-        <h3>Signaling Log</h3>
+        <h3>System Log</h3>
         <pre
           style={{
             background: "#020617",
             padding: 12,
-            maxHeight: 300,
+            maxHeight: 320,
             overflowY: "auto",
             fontSize: 12,
           }}

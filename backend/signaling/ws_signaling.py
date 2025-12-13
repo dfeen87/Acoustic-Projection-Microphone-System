@@ -1,16 +1,16 @@
 from fastapi import WebSocket, WebSocketDisconnect
 from typing import Dict, Set
 import json
-import asyncio
+
 
 class SignalingHub:
     """
     In-memory WebSocket signaling hub.
-    Prototype-safe. Docker-safe.
+    Safe for prototypes. Docker-safe.
     """
 
     def __init__(self):
-        # room_id -> set(WebSocket)
+        # room_id -> set of WebSocket connections
         self.rooms: Dict[str, Set[WebSocket]] = {}
         # websocket -> peer_id
         self.peers: Dict[WebSocket, str] = {}
@@ -20,17 +20,19 @@ class SignalingHub:
 
     async def disconnect(self, websocket: WebSocket):
         peer_id = self.peers.get(websocket)
-        for room, sockets in self.rooms.items():
+
+        for room_id, sockets in self.rooms.items():
             if websocket in sockets:
                 sockets.remove(websocket)
                 await self._broadcast(
-                    room,
+                    room_id,
                     {
                         "type": "peer_left",
                         "peerId": peer_id,
                     },
                     exclude=websocket,
                 )
+
         self.peers.pop(websocket, None)
 
     async def join_room(self, websocket: WebSocket, room_id: str, peer_id: str):
@@ -40,6 +42,7 @@ class SignalingHub:
         self.rooms[room_id].add(websocket)
         self.peers[websocket] = peer_id
 
+        # Notify others in room
         await self._broadcast(
             room_id,
             {
@@ -49,6 +52,7 @@ class SignalingHub:
             exclude=websocket,
         )
 
+        # Acknowledge join
         await websocket.send_text(
             json.dumps(
                 {
@@ -71,6 +75,7 @@ class SignalingHub:
 
     async def _broadcast(self, room_id: str, message: dict, exclude=None):
         dead = []
+
         for ws in self.rooms.get(room_id, []):
             if ws is exclude:
                 continue
@@ -84,12 +89,14 @@ class SignalingHub:
             self.peers.pop(ws, None)
 
 
+# Singleton hub instance
 hub = SignalingHub()
 
 
 async def signaling_ws(websocket: WebSocket):
     """
     WebSocket entrypoint.
+    This is what FastAPI will mount later.
     """
     await hub.connect(websocket)
 

@@ -547,50 +547,11 @@ APMSystem::process_async(
 
     return std::async(
         std::launch::async,
-        [this, microphone_array,
-         speaker_reference,
-         target_direction_rad]() {
-
-            auto beamformed =
-                beamformer_.delay_and_sum(
-                    microphone_array,
-                    target_direction_rad,
-                    0.0f);
-
-            auto echo_cancelled =
-                echo_canceller_.cancel_echo(
-                    beamformed,
-                    speaker_reference);
-
-            auto denoised =
-                noise_suppressor_.suppress(
-                    echo_cancelled);
-
-            auto vad_result =
-                vad_.detect(denoised);
-
-            if (!vad_result.speech_detected) {
-                return std::vector<AudioFrame>();
-            }
-
-            TranslationEngine::TranslationRequest trans_req;
-            trans_req.audio = denoised;
-            trans_req.source_lang = config_.source_language;
-            trans_req.target_lang = config_.target_language;
-
-            auto translation_future =
-                translator_->translate_async(trans_req);
-
-            auto translation_result =
-                translation_future.get();
-
-            auto projection_signals =
-                projector_.create_projection_signals(
-                    translation_result.translated_audio,
-                    target_direction_rad,
-                    1.5f);
-
-            return projection_signals;
+        [this, microphone_array, speaker_reference, target_direction_rad]() {
+            return process(
+                microphone_array,
+                speaker_reference,
+                target_direction_rad);
         });
 }
 
@@ -599,10 +560,53 @@ std::vector<AudioFrame> APMSystem::process(
     const AudioFrame& speaker_reference,
     float target_direction_rad) {
 
-    return process_async(
-        microphone_array,
-        speaker_reference,
-        target_direction_rad).get();
+    auto t0 = std::chrono::steady_clock::now();
+
+    // ---- DSP PIPELINE ONLY ----
+    auto beamformed =
+        beamformer_.delay_and_sum(
+            microphone_array,
+            target_direction_rad,
+            0.0f);
+
+    auto echo_cancelled =
+        echo_canceller_.cancel_echo(
+            beamformed,
+            speaker_reference);
+
+    auto denoised =
+        noise_suppressor_.suppress(
+            echo_cancelled);
+
+    auto vad_result =
+        vad_.detect(denoised);
+
+    auto t1 = std::chrono::steady_clock::now();
+
+    if (observability_) {
+        observability_->observe_dsp_latency(
+            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count());
+    }
+
+    if (!vad_result.speech_detected) {
+        return {};
+    }
+    // ---- END DSP ----
+
+    // Async / slow path (explicitly excluded from metric)
+    TranslationEngine::TranslationRequest trans_req{
+        denoised,
+        config_.source_language,
+        config_.target_language
+    };
+
+    auto translation_result =
+        translator_->translate_async(trans_req).get();
+
+    return projector_.create_projection_signals(
+        translation_result.translated_audio,
+        target_direction_rad,
+        1.5f);
 }
 
 void APMSystem::reset_all() {

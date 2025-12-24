@@ -1,0 +1,14 @@
+{
+  "name": "apm-launcher",
+  "private": true,
+  "version": "1.0.0",
+  "description": "APM system production launcher",
+  "main": "apm_launcher.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node apm_launcher.js"
+  },
+  "dependencies": {
+    "open": "^8.4.2"
+  }
+}

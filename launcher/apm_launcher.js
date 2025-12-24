@@ -14,7 +14,10 @@ const CONFIG = {
   STARTUP_DELAY: 500,           // Initial delay before health checks
   MAX_RETRIES: 3,
   BACKEND_EXECUTABLE: process.platform === "win32" ? "apm_backend.exe" : "./apm_backend",
-  UI_HTML_PATH: path.join(__dirname, "../apm-dashboard.html")
+  UI_HTML_PATHS: [
+    path.join(__dirname, "../apm-dashboard.html"),
+    path.join(__dirname, "../ui/apm-dashboard.html")
+  ]
 };
 
 // State management
@@ -63,9 +66,14 @@ function validateEnvironment() {
   }
 
   // Check UI HTML file
-  if (!fs.existsSync(CONFIG.UI_HTML_PATH)) {
-    throw new Error(`UI file not found at: ${CONFIG.UI_HTML_PATH}`);
+  const uiPath = CONFIG.UI_HTML_PATHS.find((candidate) => fs.existsSync(candidate));
+  if (!uiPath) {
+    throw new Error(
+      `UI file not found. Checked:\n  - ${CONFIG.UI_HTML_PATHS.join("\n  - ")}`
+    );
   }
+
+  CONFIG.UI_HTML_PATH = uiPath;
 
   logger.success("Environment validation passed");
 }

@@ -139,8 +139,8 @@ endif()
 # MAIN EXECUTABLE
 # ============================================================================
 
-add_executable(apm main.cpp)
-target_link_libraries(apm PRIVATE apm_core)
+add_executable(apm_backend src/core/main.cpp)
+target_link_libraries(apm_backend PRIVATE apm_core)
 
 # ============================================================================
 # EXAMPLES

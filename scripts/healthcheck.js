@@ -115,13 +115,21 @@ async function main() {
   })) results.passed++; else results.failed++;
 
   if (checkSync("apm-dashboard.html exists", () => {
-    const file = path.join(rootDir, "apm-dashboard.html");
-    if (!fs.existsSync(file)) throw new Error("File not found");
+    const candidates = [
+      path.join(rootDir, "apm-dashboard.html"),
+      path.join(rootDir, "ui", "apm-dashboard.html")
+    ];
+    const exists = candidates.some((candidate) => fs.existsSync(candidate));
+    if (!exists) throw new Error("File not found");
   })) results.passed++; else results.failed++;
 
   if (checkSync("main.cpp exists", () => {
-    const file = path.join(rootDir, "main.cpp");
-    if (!fs.existsSync(file)) throw new Error("File not found");
+    const candidates = [
+      path.join(rootDir, "main.cpp"),
+      path.join(rootDir, "src", "core", "main.cpp")
+    ];
+    const exists = candidates.some((candidate) => fs.existsSync(candidate));
+    if (!exists) throw new Error("File not found");
   })) results.passed++; else results.failed++;
 
   if (checkSync("CMakeLists.txt exists", () => {

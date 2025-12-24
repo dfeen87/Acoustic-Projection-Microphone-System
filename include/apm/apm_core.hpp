@@ -10,6 +10,16 @@ namespace apm {
  */
 class APMCore {
 public:
+    struct TextTranslationResult {
+        std::string source_text;
+        std::string translated_text;
+        std::string source_language;
+        std::string target_language;
+        bool success{false};
+        std::string error_message;
+        int processing_time_ms{0};
+    };
+
     APMCore() = default;
     ~APMCore() = default;
 
@@ -25,7 +35,7 @@ public:
      * @param num_channels Number of audio channels
      * @return true if successful, false otherwise
      */
-    bool initialize(int sample_rate, int num_channels);
+    bool initialize(int sample_rate = 48000, int num_channels = 1);
 
     /**
      * @brief Check if system is initialized
@@ -46,16 +56,49 @@ public:
     int get_num_channels() const { return num_channels_; }
 
     /**
-     * @brief Process audio buffer (placeholder)
+     * @brief Set source language code (e.g. "en")
+     */
+    void set_source_language(const std::string& lang);
+
+    /**
+     * @brief Set target language code (e.g. "es")
+     */
+    void set_target_language(const std::string& lang);
+
+    /**
+     * @brief Get current source language
+     */
+    const std::string& get_source_language() const;
+
+    /**
+     * @brief Get current target language
+     */
+    const std::string& get_target_language() const;
+
+    /**
+     * @brief Process audio buffer with DC removal + limiter
      * @param input Input audio samples
      * @return Processed audio samples
      */
     std::vector<float> process(const std::vector<float>& input);
 
+    /**
+     * @brief Translate text using the configured language pair
+     * @param text Input text
+     * @return Translation result
+     */
+    TextTranslationResult translate_text(const std::string& text) const;
+
 private:
     bool initialized_ = false;
     int sample_rate_ = 0;
     int num_channels_ = 0;
+    std::string source_language_ = "en";
+    std::string target_language_ = "es";
+    float dc_filter_coeff_ = 0.995f;
+    float limiter_threshold_ = 0.98f;
+    std::vector<float> dc_prev_input_;
+    std::vector<float> dc_prev_output_;
 };
 
 } // namespace apm

@@ -34,7 +34,11 @@ export default function APMDashboard() {
   // -------------------------
   const pcRef = useRef(null);
   const remoteStreamRef = useRef(new MediaStream());
-  const remoteAudioElRef = useRef(null);
+  const remoteAudioRef = useRef(null);
+  const [remoteStreamVersion, setRemoteStreamVersion] = useState(0);
+  const [remoteAudioConnected, setRemoteAudioConnected] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(100);
 
   // Offer storage (when receiver gets an offer before clicking Accept)
   const pendingOfferRef = useRef(null);
@@ -42,20 +46,18 @@ export default function APMDashboard() {
   // -------------------------
   // Helpers
   // -------------------------
-  const ensureRemoteAudioElement = () => {
-    if (remoteAudioElRef.current) return;
+  const handleToggleMute = () => {
+    setIsMuted((prev) => {
+      const next = !prev;
+      appendLog(next ? "muted" : "unmuted");
+      return next;
+    });
+  };
 
-    const el = document.createElement("audio");
-    el.autoplay = true;
-    el.playsInline = true;
-    el.controls = true; // helpful during debugging; remove later if you want
-    el.style.marginTop = "10px";
-    el.srcObject = remoteStreamRef.current;
-
-    remoteAudioElRef.current = el;
-    document.body.appendChild(el);
-
-    appendLog("remote audio element created (controls enabled)");
+  const handleVolumeChange = (event) => {
+    const nextVolume = Number(event.target.value);
+    setVolume(nextVolume);
+    appendLog(`volume: ${nextVolume}%`);
   };
 
   const startAudio = async () => {
@@ -117,7 +119,7 @@ export default function APMDashboard() {
       event.streams[0].getTracks().forEach((track) => {
         remoteStreamRef.current.addTrack(track);
       });
-      ensureRemoteAudioElement();
+      setRemoteStreamVersion((prev) => prev + 1);
       appendLog("received remote audio track(s)");
     };
 
@@ -342,11 +344,10 @@ export default function APMDashboard() {
 
     // Remote stream cleanup (new stream each time avoids lingering tracks)
     remoteStreamRef.current = new MediaStream();
-    if (remoteAudioElRef.current) {
-      try {
-        remoteAudioElRef.current.srcObject = remoteStreamRef.current;
-      } catch {}
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
     }
+    setRemoteAudioConnected(false);
 
     // Signaling
     signalingRef.current?.disconnect();
@@ -375,10 +376,33 @@ export default function APMDashboard() {
       try {
         if (pcRef.current) pcRef.current.close();
       } catch {}
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = null;
+      }
       stopAudio();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!remoteAudioRef.current) return;
+    remoteAudioRef.current.srcObject = remoteStreamRef.current;
+    const hasRemoteAudio = remoteStreamRef.current.getTracks().length > 0;
+    setRemoteAudioConnected(hasRemoteAudio);
+    if (hasRemoteAudio) {
+      appendLog("remote audio mounted");
+    }
+  }, [remoteStreamVersion]);
+
+  useEffect(() => {
+    if (!remoteAudioRef.current) return;
+    remoteAudioRef.current.muted = isMuted;
+  }, [isMuted]);
+
+  useEffect(() => {
+    if (!remoteAudioRef.current) return;
+    remoteAudioRef.current.volume = volume / 100;
+  }, [volume]);
 
   // -------------------------
   // Render
@@ -423,6 +447,28 @@ export default function APMDashboard() {
           <li>Click <strong>Call</strong> on one side, then <strong>Accept</strong> on the other.</li>
           <li>Mic access works on <strong>localhost</strong>. For remote hosting, you’ll need <strong>HTTPS</strong>.</li>
         </ul>
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <h3>Remote Audio</h3>
+        <p>
+          <strong>Audio connected:</strong> {remoteAudioConnected ? "Yes" : "No"}
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <button onClick={handleToggleMute}>{isMuted ? "Unmute" : "Mute"}</button>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span>Volume</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={volume}
+              onChange={handleVolumeChange}
+            />
+            <span>{volume}%</span>
+          </label>
+        </div>
+        <audio ref={remoteAudioRef} autoPlay playsInline />
       </div>
 
       <div style={{ marginTop: 18 }}>

@@ -1,9 +1,10 @@
+import asyncio
+import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Dict, List, Optional
-import time
-import uuid
+
+from backend.storage import Storage
 
 app = FastAPI(title="APM FastAPI Backend", version="0.1.0")
 
@@ -15,6 +16,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+SESSION_TIMEOUT_SECONDS = 30
+SESSION_CLEANUP_INTERVAL_SECONDS = 5
+SESSION_PURGE_AFTER_SECONDS = 10 * 60
 
 # -----------------------------
 # Models
@@ -36,29 +41,37 @@ class Session(BaseModel):
     created_at: float
     updated_at: float
 
-# -----------------------------
-# In-memory state (prototype)
-# -----------------------------
-PEERS: Dict[str, Peer] = {}
-SESSIONS: Dict[str, Session] = {}
 
-LOCAL_ID = "local-" + uuid.uuid4().hex[:8]
-PEERS[LOCAL_ID] = Peer(
-    id=LOCAL_ID,
-    name="You",
-    ip="127.0.0.1",
-    status="online",
-    last_seen=time.time(),
-)
+async def session_housekeeper(storage: Storage, stop_event: asyncio.Event) -> None:
+    while not stop_event.is_set():
+        now = time.time()
+        storage.mark_stale_sessions(SESSION_TIMEOUT_SECONDS, now=now)
+        storage.purge_sessions(SESSION_PURGE_AFTER_SECONDS, now=now)
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=SESSION_CLEANUP_INTERVAL_SECONDS)
+        except asyncio.TimeoutError:
+            continue
 
-# some starter peers so UI is not empty
-def seed_peer(name: str, ip: str, status: str):
-    pid = "peer-" + uuid.uuid4().hex[:6]
-    PEERS[pid] = Peer(id=pid, name=name, ip=ip, status=status, last_seen=time.time())
 
-seed_peer("Alice Cooper", "192.168.1.101", "online")
-seed_peer("Bob Martinez", "192.168.1.102", "online")
-seed_peer("Carol Zhang", "192.168.1.103", "away")
+@app.on_event("startup")
+async def startup() -> None:
+    storage = Storage()
+    storage.ensure_seed_peers()
+    local_peer = storage.ensure_local_peer()
+    app.state.storage = storage
+    app.state.local_peer_id = local_peer["id"]
+    app.state.stop_event = asyncio.Event()
+    app.state.housekeeper_task = asyncio.create_task(
+        session_housekeeper(storage, app.state.stop_event)
+    )
+
+
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    stop_event = app.state.stop_event
+    stop_event.set()
+    await app.state.housekeeper_task
+
 
 # -----------------------------
 # Endpoints your system expects
@@ -69,79 +82,84 @@ def health():
 
 @app.get("/api/peers")
 def list_peers():
+    storage: Storage = app.state.storage
     now = time.time()
     peers_out = []
-    for p in PEERS.values():
-        peers_out.append({
-            "id": p.id,
-            "name": p.name,
-            "ip": p.ip,
-            "status": p.status,
-            "last_seen_ago": max(0.0, now - p.last_seen),
-        })
+    for peer in storage.list_peers():
+        peers_out.append(
+            {
+                "id": peer["id"],
+                "name": peer["name"],
+                "ip": peer["ip"],
+                "status": peer["status"],
+                "last_seen_ago": max(0.0, now - peer["last_seen"]),
+            }
+        )
     return {"peers": peers_out}
 
 @app.post("/api/status")
 def update_status(body: StatusUpdate):
-    # update local peer
-    p = PEERS.get(LOCAL_ID)
-    if not p:
+    storage: Storage = app.state.storage
+    local_id = app.state.local_peer_id
+    peer = storage.get_peer(local_id)
+    if not peer:
         raise HTTPException(500, "Local peer missing")
-    p.status = body.status
-    p.last_seen = time.time()
-    PEERS[LOCAL_ID] = p
-    return {"ok": True, "peer": {"id": p.id, "status": p.status}}
+    now = time.time()
+    storage.update_peer_status(local_id, body.status, now)
+    return {"ok": True, "peer": {"id": local_id, "status": body.status}}
 
 @app.get("/api/peers/{peer_id}")
 def peer_details(peer_id: str):
-    p = PEERS.get(peer_id)
-    if not p:
+    storage: Storage = app.state.storage
+    peer = storage.get_peer(peer_id)
+    if not peer:
         raise HTTPException(404, "Peer not found")
-    return {"peer": {"id": p.id, "name": p.name, "ip": p.ip, "status": p.status}}
+    return {
+        "peer": {
+            "id": peer["id"],
+            "name": peer["name"],
+            "ip": peer["ip"],
+            "status": peer["status"],
+        }
+    }
 
 # Sessions (your hook monitors /api/session/{id})
 @app.post("/api/session")
 def create_session(peer_id: str):
-    if peer_id not in PEERS:
+    storage: Storage = app.state.storage
+    if not storage.get_peer(peer_id):
         raise HTTPException(404, "Peer not found")
-    sid = "session-" + uuid.uuid4().hex[:10]
-    now = time.time()
-    SESSIONS[sid] = Session(
-        id=sid, peer_id=peer_id, status="calling", created_at=now, updated_at=now
-    )
-    return {"session": SESSIONS[sid].model_dump()}
+    session = storage.create_session(peer_id)
+    return {"session": Session(**session).model_dump()}
 
 @app.get("/api/session/{session_id}")
 def get_session(session_id: str):
-    s = SESSIONS.get(session_id)
-    if not s:
+    storage: Storage = app.state.storage
+    session = storage.get_session(session_id)
+    if not session:
         raise HTTPException(404, "Session not found")
-
-    # simple prototype timeout logic
-    now = time.time()
-    if s.status in ("calling", "ringing") and (now - s.updated_at) > 30:
-        s.status = "timeout"
-        s.updated_at = now
-        SESSIONS[session_id] = s
-
-    return {"session": s.model_dump()}
+    return {"session": Session(**session).model_dump()}
 
 @app.post("/api/session/{session_id}/accept")
 def accept_session(session_id: str):
-    s = SESSIONS.get(session_id)
-    if not s:
+    storage: Storage = app.state.storage
+    session = storage.get_session(session_id)
+    if not session:
         raise HTTPException(404, "Session not found")
-    s.status = "connected"
-    s.updated_at = time.time()
-    SESSIONS[session_id] = s
-    return {"ok": True, "session": s.model_dump()}
+    now = time.time()
+    storage.update_session_status(session_id, "connected", now)
+    session["status"] = "connected"
+    session["updated_at"] = now
+    return {"ok": True, "session": Session(**session).model_dump()}
 
 @app.post("/api/session/{session_id}/end")
 def end_session(session_id: str):
-    s = SESSIONS.get(session_id)
-    if not s:
+    storage: Storage = app.state.storage
+    session = storage.get_session(session_id)
+    if not session:
         raise HTTPException(404, "Session not found")
-    s.status = "ended"
-    s.updated_at = time.time()
-    SESSIONS[session_id] = s
-    return {"ok": True, "session": s.model_dump()}
+    now = time.time()
+    storage.update_session_status(session_id, "ended", now)
+    session["status"] = "ended"
+    session["updated_at"] = now
+    return {"ok": True, "session": Session(**session).model_dump()}

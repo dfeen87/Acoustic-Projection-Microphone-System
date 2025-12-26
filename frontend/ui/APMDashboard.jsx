@@ -139,7 +139,7 @@ export default function APMDashboard() {
   const ensureSignaling = (activeSessionId) => {
     if (signalingRef.current) return;
 
-    const s = new WSSignalingClient("ws://localhost:8080/ws");
+    const s = new WSSignalingClient();
 
     s.on("joined", (msg) => appendLog(`joined room ${msg.roomId}`));
     s.on("peer_joined", (msg) => {

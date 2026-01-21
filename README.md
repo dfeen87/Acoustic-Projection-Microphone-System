@@ -666,7 +666,7 @@ If you use this work in research, please cite:
   title = {Acoustic Projection Microphone System},
   year = {2025},
   publisher = {GitHub},
-  url = {https://github.com/dfeen87/apm-system}
+  url = {https://github.com/dfeen87/acoustic-projection-microphone-system}
 }
 ```
 

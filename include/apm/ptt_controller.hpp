@@ -5,6 +5,7 @@
 #include <thread>
 #include <vector>
 #include <chrono>
+#include <mutex>
 
 namespace apm {
 
@@ -188,7 +189,6 @@ public:
     void reset_statistics();
 
 private:
-    void state_machine_loop();
     void play_beep(int duration_ms);
     void notify_state_change(State new_state);
     

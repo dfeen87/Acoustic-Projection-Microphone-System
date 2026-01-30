@@ -50,26 +50,32 @@ void PTTController::press() {
         return;
     }
     
-    std::lock_guard<std::mutex> lock(state_mutex_);
-    
-    State current = state_.load();
-    
-    // Don't allow press during cooldown
-    if (current == State::COOLDOWN) {
-        return;
-    }
-    
-    if (current == State::IDLE) {
-        press_time_ = std::chrono::steady_clock::now();
-        state_.store(State::TRANSMITTING);
-        transmission_count_++;
-        
-        if (beep_enabled_) {
-            play_beep(50); // Short beep on press
+    bool should_notify = false;
+    bool should_beep = false;
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+
+        State current = state_.load();
+
+        // Don't allow press during cooldown
+        if (current == State::COOLDOWN) {
+            return;
         }
-        
+
+        if (current == State::IDLE) {
+            press_time_ = std::chrono::steady_clock::now();
+            state_.store(State::TRANSMITTING);
+            transmission_count_++;
+            should_beep = beep_enabled_;
+            should_notify = true;
+        }
+    }
+
+    if (should_beep) {
+        play_beep(50); // Short beep on press
+    }
+    if (should_notify) {
         notify_state_change(State::TRANSMITTING);
-        
         std::cout << "[PTT] Pressed - Transmitting\n";
     }
 }
@@ -79,44 +85,73 @@ void PTTController::release() {
         return;
     }
     
-    std::lock_guard<std::mutex> lock(state_mutex_);
-    
-    State current = state_.load();
-    
-    if (current == State::TRANSMITTING) {
-        release_time_ = std::chrono::steady_clock::now();
-        
-        // Check minimum hold time
-        auto hold_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            release_time_ - press_time_
-        ).count();
-        
-        if (hold_duration < min_hold_ms_) {
-            std::cout << "[PTT] Released too quickly (debounced)\n";
-            state_.store(State::IDLE);
-            notify_state_change(State::IDLE);
+    bool should_beep = false;
+    bool enter_cooldown = false;
+    bool debounce_release = false;
+    int64_t hold_duration = 0;
+
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+
+        State current = state_.load();
+
+        if (current == State::TRANSMITTING) {
+            release_time_ = std::chrono::steady_clock::now();
+
+            // Check minimum hold time
+            hold_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                release_time_ - press_time_
+            ).count();
+
+            if (hold_duration < min_hold_ms_) {
+                state_.store(State::IDLE);
+                debounce_release = true;
+            } else {
+                state_.store(State::COOLDOWN);
+                enter_cooldown = true;
+                should_beep = beep_enabled_;
+            }
+        }
+    }
+
+    if (debounce_release) {
+        std::cout << "[PTT] Released too quickly (debounced)\n";
+        notify_state_change(State::IDLE);
+        return;
+    }
+
+    if (!enter_cooldown) {
+        return;
+    }
+
+    if (should_beep) {
+        play_beep(50); // Short beep on release
+    }
+
+    notify_state_change(State::COOLDOWN);
+    std::cout << "[PTT] Released - Cooldown (" << hold_duration << "ms)\n";
+
+    if (state_thread_.joinable()) {
+        state_thread_.join();
+    }
+
+    // Schedule return to IDLE after cooldown
+    state_thread_ = std::thread([this]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(cooldown_ms_));
+        if (!running_) {
             return;
         }
-        
-        if (beep_enabled_) {
-            play_beep(50); // Short beep on release
-        }
-        
-        // Enter cooldown
-        state_.store(State::COOLDOWN);
-        notify_state_change(State::COOLDOWN);
-        
-        std::cout << "[PTT] Released - Cooldown (" << hold_duration << "ms)\n";
-        
-        // Schedule return to IDLE after cooldown
-        std::thread([this]() {
-            std::this_thread::sleep_for(std::chrono::milliseconds(cooldown_ms_));
+        {
             std::lock_guard<std::mutex> lock(state_mutex_);
-            state_.store(State::IDLE);
-            notify_state_change(State::IDLE);
-            std::cout << "[PTT] Cooldown complete - Ready\n";
-        }).detach();
-    }
+            if (state_.load() == State::COOLDOWN) {
+                state_.store(State::IDLE);
+            } else {
+                return;
+            }
+        }
+        notify_state_change(State::IDLE);
+        std::cout << "[PTT] Cooldown complete - Ready\n";
+    });
 }
 
 void PTTController::toggle() {

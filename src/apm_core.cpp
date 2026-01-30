@@ -5,6 +5,7 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <locale>
 #include <unordered_map>
 
 namespace apm {
@@ -20,20 +21,22 @@ std::string trim_copy(const std::string& input) {
 }
 
 std::string to_lower_copy(const std::string& input) {
+    const std::locale locale{};
     std::string output;
     output.reserve(input.size());
     for (unsigned char ch : input) {
-        output.push_back(static_cast<char>(std::tolower(ch)));
+        output.push_back(static_cast<char>(std::tolower(ch, locale)));
     }
     return output;
 }
 
 bool is_all_upper(const std::string& input) {
+    const std::locale locale{};
     bool has_alpha = false;
     for (unsigned char ch : input) {
-        if (std::isalpha(ch)) {
+        if (std::isalpha(ch, locale)) {
             has_alpha = true;
-            if (!std::isupper(ch)) {
+            if (!std::isupper(ch, locale)) {
                 return false;
             }
         }
@@ -42,19 +45,20 @@ bool is_all_upper(const std::string& input) {
 }
 
 bool is_title_case(const std::string& input) {
+    const std::locale locale{};
     bool first_alpha = true;
     bool has_alpha = false;
     for (unsigned char ch : input) {
-        if (!std::isalpha(ch)) {
+        if (!std::isalpha(ch, locale)) {
             continue;
         }
         has_alpha = true;
         if (first_alpha) {
-            if (!std::isupper(ch)) {
+            if (!std::isupper(ch, locale)) {
                 return false;
             }
             first_alpha = false;
-        } else if (std::isupper(ch)) {
+        } else if (std::isupper(ch, locale)) {
             return false;
         }
     }
@@ -98,6 +102,7 @@ std::string translate_text_with_dictionary(
     const std::string& text,
     const std::unordered_map<std::string, std::string>& dict) {
 
+    const std::locale locale{};
     std::string result;
     result.reserve(text.size());
 
@@ -112,7 +117,7 @@ std::string translate_text_with_dictionary(
     };
 
     for (unsigned char ch : text) {
-        if (std::isalpha(ch) || ch == '\'' || ch == '-') {
+        if (std::isalpha(ch, locale) || ch == '\'' || ch == '-') {
             token.push_back(static_cast<char>(ch));
         } else {
             flush_token();

@@ -14,6 +14,8 @@ option(ENABLE_COVERAGE "Enable coverage reporting" OFF)
 option(ENABLE_LOCAL_TRANSLATION "Enable local Whisper+NLLB translation" ON)
 option(ENABLE_ENCRYPTION "Enable encryption support" ON)
 
+set(APM_ENABLE_TESTS ${BUILD_TESTING})
+
 # Coverage support
 if(ENABLE_COVERAGE)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -78,6 +80,7 @@ configure_file(
 
 set(APM_CORE_SOURCES
     src/apm_core.cpp
+    src/core/apm_core.cpp
     src/ptt_controller.cpp
     src/call_signaling.cpp
 )
@@ -182,24 +185,20 @@ endif()
 # TESTING
 # ============================================================================
 
-if(BUILD_TESTING)
+if(APM_ENABLE_TESTS)
     enable_testing()
     
     # Find GTest
     find_package(GTest)
     
     if(NOT GTest_FOUND)
-        # Fetch GTest if not found
-        include(FetchContent)
-        FetchContent_Declare(
-            googletest
-            GIT_REPOSITORY https://github.com/google/googletest.git
-            GIT_TAG        v1.14.0
-        )
-        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-        FetchContent_MakeAvailable(googletest)
+        message(WARNING "GTest not found. Install GTest or set -DBUILD_TESTING=OFF to skip tests.")
+        set(APM_ENABLE_TESTS OFF)
     endif()
     
+endif()
+
+if(APM_ENABLE_TESTS)
     # Core functionality tests
     add_executable(apm_test
         tests/test_apm_core.cpp
@@ -288,7 +287,7 @@ endif()
 # ============================================================================
 
 # Install binaries
-install(TARGETS apm apm_core
+install(TARGETS apm_backend apm_core
     EXPORT APMTargets
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
@@ -413,7 +412,7 @@ message(STATUS "─────────────────────�
 message(STATUS "Build Options:")
 message(STATUS "──────────────────────────────────────────────────────────")
 message(STATUS "  Examples:            ${BUILD_EXAMPLES}")
-message(STATUS "  Testing:             ${BUILD_TESTING}")
+message(STATUS "  Testing:             ${APM_ENABLE_TESTS}")
 message(STATUS "  Benchmarks:          ${BUILD_BENCHMARKS}")
 message(STATUS "  Coverage:            ${ENABLE_COVERAGE}")
 message(STATUS "")
@@ -440,7 +439,7 @@ message(STATUS "")
 message(STATUS "──────────────────────────────────────────────────────────")
 message(STATUS "Targets to Build:")
 message(STATUS "──────────────────────────────────────────────────────────")
-message(STATUS "  apm                  (main executable)")
+message(STATUS "  apm_backend          (main executable)")
 message(STATUS "  apm_core             (static library)")
 if(BUILD_EXAMPLES AND ENABLE_LOCAL_TRANSLATION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/translation_example.cpp)
     message(STATUS "  translation_example  (full pipeline demo)")
@@ -451,7 +450,7 @@ endif()
 if(BUILD_EXAMPLES AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/ptt_call_example.cpp)
     message(STATUS "  ptt_call_example     (PTT & call signaling demo)")
 endif()
-if(BUILD_TESTING)
+if(APM_ENABLE_TESTS)
     message(STATUS "  apm_test             (core tests)")
     if(HAVE_ENCRYPTION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_crypto.cpp)
         message(STATUS "  crypto_test          (encryption tests)")
@@ -472,7 +471,7 @@ if(ENABLE_LOCAL_TRANSLATION OR HAVE_ENCRYPTION)
     if(ENABLE_LOCAL_TRANSLATION)
         message(STATUS "  2. Setup translation: ./scripts/setup_translation.sh")
     endif()
-    if(BUILD_TESTING)
+    if(APM_ENABLE_TESTS)
         message(STATUS "  3. Run tests: ctest --output-on-failure")
     endif()
     if(BUILD_EXAMPLES)

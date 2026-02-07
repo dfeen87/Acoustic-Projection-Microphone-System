@@ -583,22 +583,16 @@ std::vector<AudioFrame> APMSystem::process(
 
     auto t1 = std::chrono::steady_clock::now();
 
-    if (observability_) {
-        observability_->observe_dsp_latency(
-            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count());
-    }
-
     if (!vad_result.speech_detected) {
         return {};
     }
     // ---- END DSP ----
 
     // Async / slow path (explicitly excluded from metric)
-    TranslationEngine::TranslationRequest trans_req{
-        denoised,
-        config_.source_language,
-        config_.target_language
-    };
+    TranslationEngine::TranslationRequest trans_req;
+    trans_req.audio = denoised;
+    trans_req.source_lang = config_.source_language;
+    trans_req.target_lang = config_.target_language;
 
     auto translation_result =
         translator_->translate_async(trans_req).get();

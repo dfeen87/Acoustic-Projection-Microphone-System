@@ -197,13 +197,26 @@ async function main() {
   if (!backendRunning || !uiRunning) {
     log("\n6. Port Availability", "blue");
     
+    const portIsFree = (err) => {
+      if (!err) return false;
+      const message = err.message || "";
+      const code = err.code || "";
+      return (
+        message.includes("ECONNREFUSED") ||
+        message.includes("Request timeout") ||
+        code === "ECONNREFUSED" ||
+        code === "ECONNRESET" ||
+        code === "ENOTFOUND"
+      );
+    };
+
     if (!backendRunning) {
       await checkAsync(`Backend port ${BACKEND_PORT} available`, async () => {
         try {
           await httpGet(`http://localhost:${BACKEND_PORT}/health`, 500);
           throw new Error(`Port in use by another service`);
         } catch (err) {
-          if (err.message.includes("ECONNREFUSED")) {
+          if (portIsFree(err)) {
             return; // Port is free
           }
           throw err;
@@ -217,7 +230,7 @@ async function main() {
           await httpGet(`http://localhost:${UI_PORT}/`, 500);
           throw new Error(`Port in use by another service`);
         } catch (err) {
-          if (err.message.includes("ECONNREFUSED")) {
+          if (portIsFree(err)) {
             return; // Port is free
           }
           throw err;

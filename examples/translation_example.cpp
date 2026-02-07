@@ -17,6 +17,8 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <cmath>
+#include <cstdlib>
 
 using namespace apm;
 
@@ -45,7 +47,6 @@ int main() {
     LocalTranslationEngine::Config trans_config;
     trans_config.source_language = "en";
     trans_config.target_language = "es";
-    trans_config.script_path = "scripts/translation_bridge.py";
     trans_config.use_gpu = true;
     
     LocalTranslationEngine translator(trans_config);
@@ -73,7 +74,8 @@ int main() {
     std::cout << std::endl;
 
     // Target angle: 30 degrees to the right
-    float target_angle = 30.0f * M_PI / 180.0f;
+    constexpr float kPi = 3.14159265358979323846f;
+    float target_angle = 30.0f * kPi / 180.0f;
     
     // Accumulate audio for translation
     std::vector<float> accumulated_audio;
@@ -92,8 +94,8 @@ int main() {
             // Simulate audio: sine wave with noise
             for (int i = 0; i < frame_size; ++i) {
                 float t = (frame_idx * frame_size + i) / (float)apm_config.sample_rate;
-                float signal = 0.3f * std::sin(2.0f * M_PI * 440.0f * t);  // A4 note
-                float noise = 0.05f * (2.0f * (rand() / (float)RAND_MAX) - 1.0f);
+                float signal = 0.3f * std::sin(2.0f * kPi * 440.0f * t);  // A4 note
+                float noise = 0.05f * (2.0f * (std::rand() / (float)RAND_MAX) - 1.0f);
                 samples[i] = signal + noise;
             }
             

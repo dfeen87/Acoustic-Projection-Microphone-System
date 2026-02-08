@@ -23,7 +23,8 @@ std::string to_lower_copy(const std::string& input) {
     std::string output;
     output.reserve(input.size());
     for (unsigned char ch : input) {
-        output.push_back(static_cast<char>(std::tolower(ch)));
+        output.push_back(static_cast<char>(
+            std::tolower(static_cast<unsigned char>(ch))));
     }
     return output;
 }
@@ -31,9 +32,9 @@ std::string to_lower_copy(const std::string& input) {
 bool is_all_upper(const std::string& input) {
     bool has_alpha = false;
     for (unsigned char ch : input) {
-        if (std::isalpha(ch)) {
+        if (std::isalpha(static_cast<unsigned char>(ch))) {
             has_alpha = true;
-            if (!std::isupper(ch)) {
+            if (!std::isupper(static_cast<unsigned char>(ch))) {
                 return false;
             }
         }
@@ -45,16 +46,16 @@ bool is_title_case(const std::string& input) {
     bool first_alpha = true;
     bool has_alpha = false;
     for (unsigned char ch : input) {
-        if (!std::isalpha(ch)) {
+        if (!std::isalpha(static_cast<unsigned char>(ch))) {
             continue;
         }
         has_alpha = true;
         if (first_alpha) {
-            if (!std::isupper(ch)) {
+            if (!std::isupper(static_cast<unsigned char>(ch))) {
                 return false;
             }
             first_alpha = false;
-        } else if (std::isupper(ch)) {
+        } else if (std::isupper(static_cast<unsigned char>(ch))) {
             return false;
         }
     }
@@ -115,7 +116,7 @@ std::string translate_text_with_dictionary(
     };
 
     for (unsigned char ch : text) {
-        if (std::isalpha(ch) || ch == '\'' || ch == '-') {
+        if (std::isalpha(static_cast<unsigned char>(ch)) || ch == '\'' || ch == '-') {
             token.push_back(static_cast<char>(ch));
         } else {
             flush_token();

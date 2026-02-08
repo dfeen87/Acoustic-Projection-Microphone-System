@@ -48,9 +48,9 @@ public:
     // Disable copy, enable move
     PTTController(const PTTController&) = delete;
     PTTController& operator=(const PTTController&) = delete;
-    PTTController(PTTController&&) = default;
-    PTTController& operator=(PTTController&&) = default;
-    
+    PTTController(PTTController&&) = delete;
+    PTTController& operator=(PTTController&&) = delete;
+  
     /**
      * @brief Initialize PTT controller
      * @param method Input method to use

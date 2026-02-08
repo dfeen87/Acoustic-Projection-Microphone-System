@@ -26,8 +26,9 @@ RUN cmake -B build \
     -DBUILD_BENCHMARKS=OFF \
     -DENABLE_LOCAL_TRANSLATION=OFF \
     -DENABLE_ENCRYPTION=OFF \
-    -DENABLE_TFLITE=OFF \
-    && cmake --build build -j$(nproc)
+    -DENABLE_TFLITE=OFF
+
+RUN cmake --build build -j$(nproc) --verbose
 
 # ============================
 # Stage 2 — Runtime (FastAPI + APM)

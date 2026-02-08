@@ -5,10 +5,15 @@
 #include <complex>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
+
+#ifdef HAVE_FFTW3
 #include <fftw3.h>
+#endif
 
 namespace apm {
 
+#ifdef HAVE_FFTW3
 class FFTProcessor {
 public:
     explicit FFTProcessor(int size);
@@ -305,3 +310,69 @@ std::vector<float> STFTProcessor::synthesize(
 }
 
 } // namespace apm
+
+#else
+
+namespace apm {
+
+class FFTProcessor {
+public:
+    explicit FFTProcessor(int size)
+        : size_(size) {
+        throw std::runtime_error("FFTW3 support is not available");
+    }
+    ~FFTProcessor() = default;
+
+    FFTProcessor(const FFTProcessor&) = delete;
+    FFTProcessor& operator=(const FFTProcessor&) = delete;
+    FFTProcessor(FFTProcessor&&) noexcept = default;
+    FFTProcessor& operator=(FFTProcessor&&) noexcept = default;
+
+    void forward(const std::vector<float>&,
+                 std::vector<std::complex<float>>&) {
+        throw std::runtime_error("FFTW3 support is not available");
+    }
+
+    void inverse(const std::vector<std::complex<float>>&,
+                 std::vector<float>&) {
+        throw std::runtime_error("FFTW3 support is not available");
+    }
+
+    enum class WindowType {
+        Hann,
+        Hamming,
+        Blackman,
+        Kaiser
+    };
+
+    static void apply_window(std::vector<float>&, WindowType) {
+        throw std::runtime_error("FFTW3 support is not available");
+    }
+
+    int size() const { return size_; }
+    int complex_size() const { return size_ / 2 + 1; }
+
+private:
+    int size_;
+};
+
+class STFTProcessor {
+public:
+    STFTProcessor(int, int, FFTProcessor::WindowType) {
+        throw std::runtime_error("FFTW3 support is not available");
+    }
+
+    std::vector<std::vector<std::complex<float>>> analyze(
+        const std::vector<float>&) {
+        throw std::runtime_error("FFTW3 support is not available");
+    }
+
+    std::vector<float> synthesize(
+        const std::vector<std::vector<std::complex<float>>>&) {
+        throw std::runtime_error("FFTW3 support is not available");
+    }
+};
+
+} // namespace apm
+
+#endif

@@ -34,6 +34,12 @@ find_package(Threads REQUIRED)
 find_library(FFTW3F_LIBRARY NAMES fftw3f)
 find_path(FFTW3_INCLUDE_DIR NAMES fftw3.h)
 
+if(FFTW3F_LIBRARY AND FFTW3_INCLUDE_DIR)
+    set(HAVE_FFTW3 ON)
+else()
+    set(HAVE_FFTW3 OFF)
+endif()
+
 # TensorFlow Lite (optional)
 find_library(TFLITE_LIBRARY NAMES tensorflowlite tensorflow-lite)
 find_path(TFLITE_INCLUDE_DIR NAMES tensorflow/lite/interpreter.h)
@@ -116,9 +122,10 @@ target_include_directories(apm_core PUBLIC
 target_link_libraries(apm_core PUBLIC Threads::Threads)
 
 # Optional: link FFTW if present
-if(FFTW3F_LIBRARY AND FFTW3_INCLUDE_DIR)
+if(HAVE_FFTW3)
     target_include_directories(apm_core PUBLIC ${FFTW3_INCLUDE_DIR})
     target_link_libraries(apm_core PUBLIC ${FFTW3F_LIBRARY})
+    target_compile_definitions(apm_core PUBLIC HAVE_FFTW3=1)
     message(STATUS "FFTW3 found and linked")
 endif()
 
@@ -401,7 +408,7 @@ endif()
 message(STATUS "  PTT & Signaling:     Yes")
 message(STATUS "    ↳ Push-to-Talk + UDP Call Signaling")
 message(STATUS "  TensorFlow Lite:     ${HAVE_TFLITE}")
-if(FFTW3F_LIBRARY)
+if(HAVE_FFTW3)
     message(STATUS "  FFTW3:               Yes")
 else()
     message(STATUS "  FFTW3:               No (optional)")

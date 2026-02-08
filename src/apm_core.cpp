@@ -72,7 +72,8 @@ std::string apply_capitalization(const std::string& original,
         std::string out = translated;
         std::transform(out.begin(), out.end(), out.begin(),
                        [](unsigned char ch) {
-                           return static_cast<char>(std::toupper(ch));
+                           return static_cast<char>(std::toupper(
+                               static_cast<unsigned char>(ch)));
                        });
         return out;
     }

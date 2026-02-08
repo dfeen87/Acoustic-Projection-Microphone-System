@@ -182,7 +182,7 @@ if(BUILD_EXAMPLES)
 endif()
 
 # ============================================================================
-# TESTING
+# TESTING - ALL IN ONE BLOCK
 # ============================================================================
 
 if(APM_ENABLE_TESTS)
@@ -201,15 +201,8 @@ if(APM_ENABLE_TESTS)
             URL https://github.com/google/googletest/archive/refs/tags/release-1.12.1.zip
         )
         FetchContent_MakeAvailable(googletest)
-        if(NOT TARGET GTest::gtest)
-            message(WARNING "Failed to fetch googletest. Install GTest or set -DBUILD_TESTING=OFF to skip tests.")
-            set(APM_ENABLE_TESTS OFF)
-        endif()
     endif()
     
-endif()
-
-if(APM_ENABLE_TESTS)
     # Core functionality tests
     add_executable(apm_test
         tests/test_apm_core.cpp

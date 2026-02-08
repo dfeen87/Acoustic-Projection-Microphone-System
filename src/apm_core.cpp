@@ -5,7 +5,6 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
-#include <locale>
 #include <unordered_map>
 
 namespace apm {
@@ -21,22 +20,20 @@ std::string trim_copy(const std::string& input) {
 }
 
 std::string to_lower_copy(const std::string& input) {
-    const std::locale locale{};
     std::string output;
     output.reserve(input.size());
     for (unsigned char ch : input) {
-        output.push_back(static_cast<char>(std::tolower(ch, locale)));
+        output.push_back(static_cast<char>(std::tolower(ch)));
     }
     return output;
 }
 
 bool is_all_upper(const std::string& input) {
-    const std::locale locale{};
     bool has_alpha = false;
     for (unsigned char ch : input) {
-        if (std::isalpha(ch, locale)) {
+        if (std::isalpha(ch)) {
             has_alpha = true;
-            if (!std::isupper(ch, locale)) {
+            if (!std::isupper(ch)) {
                 return false;
             }
         }
@@ -45,20 +42,19 @@ bool is_all_upper(const std::string& input) {
 }
 
 bool is_title_case(const std::string& input) {
-    const std::locale locale{};
     bool first_alpha = true;
     bool has_alpha = false;
     for (unsigned char ch : input) {
-        if (!std::isalpha(ch, locale)) {
+        if (!std::isalpha(ch)) {
             continue;
         }
         has_alpha = true;
         if (first_alpha) {
-            if (!std::isupper(ch, locale)) {
+            if (!std::isupper(ch)) {
                 return false;
             }
             first_alpha = false;
-        } else if (std::isupper(ch, locale)) {
+        } else if (std::isupper(ch)) {
             return false;
         }
     }
@@ -73,23 +69,26 @@ std::string apply_capitalization(const std::string& original,
 
     if (is_all_upper(original)) {
         std::string out = translated;
-        std::transform(out.begin(), out.end(), out.begin(), [](unsigned char ch) {
-            return static_cast<char>(std::toupper(ch));
-        });
+        std::transform(out.begin(), out.end(), out.begin(),
+                       [](unsigned char ch) {
+                           return static_cast<char>(std::toupper(ch));
+                       });
         return out;
     }
 
     if (is_title_case(original)) {
         std::string out = translated;
-        out[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(out[0])));
+        out[0] = static_cast<char>(std::toupper(
+            static_cast<unsigned char>(out[0])));
         return out;
     }
 
     return translated;
 }
 
-std::string translate_word(const std::string& word,
-                           const std::unordered_map<std::string, std::string>& dict) {
+std::string translate_word(
+    const std::string& word,
+    const std::unordered_map<std::string, std::string>& dict) {
     const auto lower = to_lower_copy(word);
     const auto it = dict.find(lower);
     if (it == dict.end()) {
@@ -102,7 +101,6 @@ std::string translate_text_with_dictionary(
     const std::string& text,
     const std::unordered_map<std::string, std::string>& dict) {
 
-    const std::locale locale{};
     std::string result;
     result.reserve(text.size());
 
@@ -117,7 +115,7 @@ std::string translate_text_with_dictionary(
     };
 
     for (unsigned char ch : text) {
-        if (std::isalpha(ch, locale) || ch == '\'' || ch == '-') {
+        if (std::isalpha(ch) || ch == '\'' || ch == '-') {
             token.push_back(static_cast<char>(ch));
         } else {
             flush_token();

@@ -37,6 +37,13 @@ APM System includes **fully local speech recognition and translation** using sta
 # Activate and test
 source venv/bin/activate
 python3 scripts/translation_bridge.py audio.wav --source en --target es
+Platform Notes
+Supported on Linux and macOS (Intel & Apple Silicon)
+
+Text translation fallback uses portable <cctype> classification
+(no locale-dependent behavior) for cross-platform correctness
+
+CI and Docker validate Linux builds; macOS builds are verified locally
 ```
 
 ### Supported Languages

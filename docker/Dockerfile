@@ -16,6 +16,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY . .
 
+# ---- Show what we're working with ----
+RUN echo "===== CMakeLists.txt locations =====" && \
+    find . -name "CMakeLists.txt" -type f
+
 # ---- Configure (core-only, zero optional features) ----
 RUN cmake -S . -B build \
     -G Ninja \
@@ -25,18 +29,30 @@ RUN cmake -S . -B build \
     -DBUILD_BENCHMARKS=OFF \
     -DENABLE_LOCAL_TRANSLATION=OFF \
     -DENABLE_ENCRYPTION=OFF \
-    -DENABLE_TFLITE=OFF
+    -DENABLE_TFLITE=OFF 2>&1 | tee /tmp/cmake-config.log \
+    || (echo "===== CMake configure failed =====" && \
+        cat /tmp/cmake-config.log && \
+        exit 1)
 
-# ---- Build ONLY the backend binary ----
-RUN cmake --build build --target apm_backend --verbose
+# ---- Show available build targets ----
+RUN echo "===== Available build targets =====" && \
+    cmake --build build --target help 2>&1 | head -50
+
+# ---- Try building with error capture ----
+RUN cmake --build build --target apm_backend --verbose 2>&1 | tee /tmp/build.log; \
+    BUILD_EXIT_CODE=$?; \
+    if [ $BUILD_EXIT_CODE -ne 0 ]; then \
+        echo "===== BUILD FAILED (exit code $BUILD_EXIT_CODE) ====="; \
+        echo "===== Last 200 lines of build output ====="; \
+        tail -200 /tmp/build.log; \
+        echo "===== First compilation error ====="; \
+        grep -A 10 "error:" /tmp/build.log | head -30 || true; \
+        exit 1; \
+    fi
 
 # ---- DEBUG: Find where the binary actually is ----
-RUN echo "===== Searching for apm_backend binary =====" && \
-    find /app/build -type f -name "apm_backend*" -o -name "*apm_backend*" | head -20 && \
-    echo "===== All executables in build directory =====" && \
-    find /app/build -type f -executable | head -20 && \
-    echo "===== Contents of build directory =====" && \
-    ls -la /app/build/
+RUN echo "===== Searching for binaries =====" && \
+    find /app/build -type f -executable 2>/dev/null | head -20 || true
 
 # ============================
 # Stage 2 — Runtime (FastAPI + APM)
@@ -44,7 +60,6 @@ RUN echo "===== Searching for apm_backend binary =====" && \
 FROM ubuntu:22.04 AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 
-# ---- Runtime deps ONLY (no build tools) ----
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
@@ -53,30 +68,24 @@ RUN apt-get update && apt-get install -y \
     libstdc++6 \
     && rm -rf /var/lib/apt/lists/*
 
-# ---- Upgrade pip ----
 RUN python3 -m pip install --no-cache-dir --upgrade pip
 
-# ---- Python deps ----
 RUN pip install --no-cache-dir \
     fastapi \
     "uvicorn[standard]"
 
 WORKDIR /app
 
-# ---- Copy native engine (adjust path based on debug output) ----
-# Try copying the entire build directory first to find it
-COPY --from=builder /app/build /app/build
+# Copy entire build dir temporarily
+COPY --from=builder /app/build /tmp/build
 
-# Find and move the binary to expected location
-RUN find /app/build -type f -executable -name "*apm*" | head -1 | xargs -I {} cp {} /app/apm_backend \
+# Find and copy the binary
+RUN find /tmp/build -type f -executable | head -1 | xargs -I {} cp {} /app/apm_backend \
     && chmod +x /app/apm_backend \
-    && ls -la /app/apm_backend
+    && rm -rf /tmp/build
 
-# ---- Copy FastAPI backend ----
 COPY backend /app/backend
 
-# ---- Expose API port ----
 EXPOSE 8080
 
-# ---- Run API ----
 CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8080"]

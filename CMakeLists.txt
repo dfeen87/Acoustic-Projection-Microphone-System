@@ -186,84 +186,46 @@ endif()
 # ============================================================================
 
 if(APM_ENABLE_TESTS)
+    include(CTest)
     enable_testing()
     
-    # Find GTest
     find_package(GTest QUIET)
     
     if(NOT GTest_FOUND)
         message(STATUS "GTest not found. Fetching googletest...")
         include(FetchContent)
-        set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
-        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
         FetchContent_Declare(
             googletest
-            URL https://github.com/google/googletest/archive/refs/tags/release-1.12.1.zip
+            URL https://github.com/google/googletest/archive/release-1.14.0.zip
         )
         FetchContent_MakeAvailable(googletest)
     endif()
     
     # Core functionality tests
-    add_executable(apm_test
-        tests/test_apm_core.cpp
-    )
-    
-    target_link_libraries(apm_test
-        PRIVATE
-        apm_core
-        GTest::gtest
-        GTest::gtest_main
-    )
-    
+    add_executable(apm_test tests/test_apm_core.cpp)
+    target_link_libraries(apm_test PRIVATE apm_core gtest gtest_main)
     add_test(NAME apm_core_test COMMAND apm_test)
     
     # Crypto tests (if enabled)
     if(HAVE_ENCRYPTION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_crypto.cpp)
-        add_executable(crypto_test
-            tests/test_crypto.cpp
-        )
-        
-        target_link_libraries(crypto_test
-            PRIVATE
-            apm_core
-            GTest::gtest
-            GTest::gtest_main
-        )
-        
+        add_executable(crypto_test tests/test_crypto.cpp)
+        target_link_libraries(crypto_test PRIVATE apm_core gtest gtest_main)
         add_test(NAME crypto_test COMMAND crypto_test)
         message(STATUS "Building crypto tests")
     endif()
     
     # Translation integration tests (if enabled)
     if(ENABLE_LOCAL_TRANSLATION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_translation_integration.cpp)
-        add_executable(test_translation
-            tests/test_translation_integration.cpp
-        )
-        
-        target_link_libraries(test_translation
-            PRIVATE
-            apm_core
-            Threads::Threads
-        )
-        
+        add_executable(test_translation tests/test_translation_integration.cpp)
+        target_link_libraries(test_translation PRIVATE apm_core Threads::Threads)
         add_test(NAME translation_integration_test COMMAND test_translation)
-        
         message(STATUS "Building translation integration tests")
     endif()
     
     # PTT + Call Signaling tests
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ptt_signaling.cpp)
-        add_executable(ptt_signaling_test
-            tests/test_ptt_signaling.cpp
-        )
-        
-        target_link_libraries(ptt_signaling_test
-            PRIVATE
-            apm_core
-            GTest::gtest
-            GTest::gtest_main
-        )
-        
+        add_executable(ptt_signaling_test tests/test_ptt_signaling.cpp)
+        target_link_libraries(ptt_signaling_test PRIVATE apm_core gtest gtest_main)
         add_test(NAME ptt_signaling_test COMMAND ptt_signaling_test)
         message(STATUS "Building PTT and Call Signaling tests")
     endif()

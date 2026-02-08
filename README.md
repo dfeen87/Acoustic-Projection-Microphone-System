@@ -80,6 +80,15 @@ English, Spanish, French, German, Italian, Portuguese, Russian, Chinese, Japanes
 └─────────────────┘                          └─────────────┘
 ```
 
+### Architecture Notes
+
+The codebase is intentionally split into two layers:
+
+- `APMCore` (`src/apm_core.cpp`): lightweight DSP + text fallback suitable for embedding
+- `APMSystem` (`src/core/apm_system.cpp`): full real-time pipeline (beamforming, NS, AEC, VAD, translation, projection)
+
+Each component is defined exactly once to ensure clean builds across Linux and macOS.
+
 ## 🚀 Quick Start
 
 ### Prerequisites

@@ -1,0 +1,49 @@
+cff-version: 1.2.0
+message: >
+  If you use this software in your research, engineering work, or publications,
+  please cite it using the metadata below.
+
+type: software
+title: Acoustic Projection Microphone System (APM)
+abstract: >
+  The Acoustic Projection Microphone System (APM) is a real-time audio processing
+  framework providing beamforming, echo cancellation, noise suppression, voice
+  activity detection, push-to-talk signaling, and optional translation pipelines.
+  It is designed for low-latency, production-grade audio systems and secure
+  communication environments.
+
+authors:
+  - given-names: Don Michael
+    family-names: Feeney Jr.
+    alias: Don Feeney
+    email: dfeen87@gmail.com
+
+repository-code: https://github.com/dfeen87/Acoustic-Projection-Microphone-System
+url: https://github.com/dfeen87/Acoustic-Projection-Microphone-System
+
+license: MIT
+
+version: 4.0.0
+date-released: 2026-02-07
+
+keywords:
+  - audio signal processing
+  - beamforming
+  - echo cancellation
+  - noise suppression
+  - voice activity detection
+  - push-to-talk
+  - real-time systems
+  - C++
+  - DSP
+
+preferred-citation:
+  type: software
+  title: Acoustic Projection Microphone System (APM)
+  authors:
+    - given-names: Don Michael
+      family-names: Feeney Jr.
+  year: 2026
+  version: 4.0.0
+  repository-code: https://github.com/dfeen87/Acoustic-Projection-Microphone-System
+  license: MIT

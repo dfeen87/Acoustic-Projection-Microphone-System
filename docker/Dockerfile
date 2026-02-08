@@ -5,19 +5,20 @@ FROM ubuntu:22.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# ---- Toolchain only (NO optional libs) ----
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
     ninja-build \
     git \
-    libfftw3-dev \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY . .
 
-# 🔒 Explicitly disable optional features for container build
-RUN cmake -B build \
+# ---- Configure (core-only, zero optional features) ----
+RUN cmake -S . -B build \
     -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_TESTING=OFF \
@@ -26,12 +27,14 @@ RUN cmake -B build \
     -DENABLE_LOCAL_TRANSLATION=OFF \
     -DENABLE_ENCRYPTION=OFF \
     -DENABLE_TFLITE=OFF \
- || (echo "----- CMake configure failed -----" \
-     && cat build/CMakeFiles/CMakeOutput.log \
-     && cat build/CMakeFiles/CMakeError.log \
-     && exit 1)
+    || (echo "===== CMake configure failed =====" && \
+        cat build/CMakeFiles/CMakeError.log || true && \
+        cat build/CMakeFiles/CMakeOutput.log || true && \
+        exit 1)
 
-RUN cmake --build build --target apm_backend --verbose
+# ---- Build ONLY the backend binary ----
+RUN cmake --build build --target apm_backend --verbose \
+    || (echo "===== Build failed =====" && exit 1)
 
 # ============================
 # Stage 2 — Runtime (FastAPI + APM)
@@ -40,16 +43,15 @@ FROM ubuntu:22.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# ---- System runtime deps only ----
+# ---- Runtime deps ONLY (no build tools) ----
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     python3-venv \
-    libfftw3-3 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# ---- Upgrade pip safely ----
+# ---- Upgrade pip ----
 RUN python3 -m pip install --no-cache-dir --upgrade pip
 
 # ---- Python deps ----
@@ -62,11 +64,11 @@ WORKDIR /app
 # ---- Copy native engine ----
 COPY --from=builder /app/build/apm_backend /app/apm_backend
 
-# ---- Copy backend (FastAPI) ----
+# ---- Copy FastAPI backend ----
 COPY backend /app/backend
 
-# ---- Expose HTTP/WebSocket port ----
+# ---- Expose API port ----
 EXPOSE 8080
 
-# ---- Run FastAPI ----
+# ---- Run API ----
 CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8080"]

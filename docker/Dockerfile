@@ -21,14 +21,12 @@ RUN cmake -B build \
     -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_TESTING=OFF \
-    -DAPM_ENABLE_TESTS=OFF \
     -DBUILD_EXAMPLES=OFF \
     -DBUILD_BENCHMARKS=OFF \
     -DENABLE_LOCAL_TRANSLATION=OFF \
     -DENABLE_ENCRYPTION=OFF \
-    -DENABLE_TFLITE=OFF
-
-RUN cmake --build build -j$(nproc) --verbose
+    -DENABLE_TFLITE=OFF \
+ && cmake --build build --verbose -- -v
 
 # ============================
 # Stage 2 — Runtime (FastAPI + APM)

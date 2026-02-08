@@ -31,7 +31,7 @@ RUN cmake -B build \
      && cat build/CMakeFiles/CMakeError.log \
      && exit 1)
 
-RUN cmake --build build --verbose
+RUN cmake --build build --target apm_backend --verbose
 
 # ============================
 # Stage 2 — Runtime (FastAPI + APM)

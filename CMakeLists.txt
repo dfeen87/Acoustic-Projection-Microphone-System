@@ -192,6 +192,7 @@ endif()
 if(APM_ENABLE_TESTS)
     include(CTest)
     enable_testing()
+endif()
     
     find_package(GTest QUIET)
     

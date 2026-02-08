@@ -5,8 +5,11 @@ Uses Whisper for speech recognition and NLLB for translation
 100% local processing - no cloud APIs
 """
 
+import os
 import sys
 import json
+from typing import Optional, Tuple
+
 import numpy as np
 import torch
 from pathlib import Path
@@ -27,10 +30,44 @@ except ImportError:
     print("WARNING: Transformers not installed. Run: pip install transformers", file=sys.stderr)
 
 
+def configure_offline_mode(enabled: bool) -> None:
+    if not enabled:
+        return
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("HF_DATASETS_OFFLINE", "1")
+
+
+def resolve_whisper_model(
+    whisper_model: str,
+    offline: bool,
+    cache_dir: Optional[str],
+) -> Tuple[str, Optional[str]]:
+    model_path = Path(whisper_model)
+    if model_path.exists():
+        return str(model_path), None
+
+    cache_root = Path(cache_dir) if cache_dir else Path.home() / ".cache" / "whisper"
+    cached_file = cache_root / f"{whisper_model}.pt"
+    if offline and not cached_file.exists():
+        raise RuntimeError(
+            f"Whisper model '{whisper_model}' not available offline. "
+            f"Download it first or point --whisper-model to a local file."
+        )
+    return whisper_model, str(cache_root) if cache_dir else None
+
+
 class LocalTranslationEngine:
     """Local translation engine using Whisper + NLLB"""
     
-    def __init__(self, whisper_model="small", nllb_model="facebook/nllb-200-distilled-600M", device=None):
+    def __init__(
+        self,
+        whisper_model="small",
+        nllb_model="facebook/nllb-200-distilled-600M",
+        device=None,
+        offline=False,
+        whisper_cache_dir=None,
+    ):
         """
         Initialize translation engine
         
@@ -39,13 +76,23 @@ class LocalTranslationEngine:
             nllb_model: NLLB model from HuggingFace
             device: "cuda" or "cpu" (auto-detect if None)
         """
+        self.offline = offline
+        configure_offline_mode(self.offline)
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Using device: {self.device}", file=sys.stderr)
         
         # Load Whisper
         if WHISPER_AVAILABLE:
-            print(f"Loading Whisper model: {whisper_model}...", file=sys.stderr)
-            self.whisper_model = whisper.load_model(whisper_model, device=self.device)
+            resolved_model, cache_root = resolve_whisper_model(
+                whisper_model, self.offline, whisper_cache_dir
+            )
+            print(f"Loading Whisper model: {resolved_model}...", file=sys.stderr)
+            if cache_root:
+                self.whisper_model = whisper.load_model(
+                    resolved_model, device=self.device, download_root=cache_root
+                )
+            else:
+                self.whisper_model = whisper.load_model(resolved_model, device=self.device)
             print("Whisper loaded successfully", file=sys.stderr)
         else:
             self.whisper_model = None
@@ -53,8 +100,14 @@ class LocalTranslationEngine:
         # Load NLLB
         if NLLB_AVAILABLE:
             print(f"Loading NLLB model: {nllb_model}...", file=sys.stderr)
-            self.nllb_tokenizer = AutoTokenizer.from_pretrained(nllb_model)
-            self.nllb_model = AutoModelForSeq2SeqLM.from_pretrained(nllb_model).to(self.device)
+            self.nllb_tokenizer = AutoTokenizer.from_pretrained(
+                nllb_model,
+                local_files_only=self.offline,
+            )
+            self.nllb_model = AutoModelForSeq2SeqLM.from_pretrained(
+                nllb_model,
+                local_files_only=self.offline,
+            ).to(self.device)
             print("NLLB loaded successfully", file=sys.stderr)
         else:
             self.nllb_tokenizer = None
@@ -163,14 +216,23 @@ def main():
     parser.add_argument("--target", default="es", help="Target language code")
     parser.add_argument("--whisper-model", default="small", help="Whisper model size")
     parser.add_argument("--device", choices=["cuda", "cpu"], help="Device to use")
+    parser.add_argument("--nllb-model", default="facebook/nllb-200-distilled-600M",
+                        help="NLLB model name or local path")
+    parser.add_argument("--offline", action="store_true",
+                        help="Force offline mode (no model downloads)")
+    parser.add_argument("--whisper-cache-dir", help="Override Whisper cache directory")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     
     args = parser.parse_args()
     
     # Initialize engine
+    offline = args.offline or os.environ.get("APM_OFFLINE") == "1"
     engine = LocalTranslationEngine(
         whisper_model=args.whisper_model,
-        device=args.device
+        nllb_model=args.nllb_model,
+        device=args.device,
+        offline=offline,
+        whisper_cache_dir=args.whisper_cache_dir,
     )
     
     # Process

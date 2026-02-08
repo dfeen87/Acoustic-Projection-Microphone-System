@@ -43,7 +43,7 @@ RUN pip3 install --no-cache-dir \
 WORKDIR /app
 
 # ---- Copy native engine ----
-COPY --from=builder /app/build/apm /app/apm
+COPY --from=builder /app/build/apm_backend /app/apm_backend
 
 # ---- Copy backend (FastAPI) ----
 COPY backend /app/backend

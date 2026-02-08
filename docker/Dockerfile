@@ -25,18 +25,18 @@ RUN cmake -S . -B build \
     -DBUILD_BENCHMARKS=OFF \
     -DENABLE_LOCAL_TRANSLATION=OFF \
     -DENABLE_ENCRYPTION=OFF \
-    -DENABLE_TFLITE=OFF \
-    || (echo "===== CMake configure failed =====" && \
-        cat build/CMakeFiles/CMakeError.log 2>/dev/null || true && \
-        cat build/CMakeFiles/CMakeOutput.log 2>/dev/null || true && \
-        exit 1)
+    -DENABLE_TFLITE=OFF
 
-# ---- Build ONLY the backend binary with full output ----
-RUN cmake --build build --target apm_backend --verbose 2>&1 | tee build.log \
-    || (echo "===== Build failed =====" && \
-        echo "Last 100 lines of build output:" && \
-        tail -100 build.log && \
-        exit 1)
+# ---- Build ONLY the backend binary ----
+RUN cmake --build build --target apm_backend --verbose
+
+# ---- DEBUG: Find where the binary actually is ----
+RUN echo "===== Searching for apm_backend binary =====" && \
+    find /app/build -type f -name "apm_backend*" -o -name "*apm_backend*" | head -20 && \
+    echo "===== All executables in build directory =====" && \
+    find /app/build -type f -executable | head -20 && \
+    echo "===== Contents of build directory =====" && \
+    ls -la /app/build/
 
 # ============================
 # Stage 2 — Runtime (FastAPI + APM)
@@ -63,14 +63,17 @@ RUN pip install --no-cache-dir \
 
 WORKDIR /app
 
-# ---- Copy native engine ----
-COPY --from=builder /app/build/apm_backend /app/apm_backend
+# ---- Copy native engine (adjust path based on debug output) ----
+# Try copying the entire build directory first to find it
+COPY --from=builder /app/build /app/build
+
+# Find and move the binary to expected location
+RUN find /app/build -type f -executable -name "*apm*" | head -1 | xargs -I {} cp {} /app/apm_backend \
+    && chmod +x /app/apm_backend \
+    && ls -la /app/apm_backend
 
 # ---- Copy FastAPI backend ----
 COPY backend /app/backend
-
-# ---- Make binary executable ----
-RUN chmod +x /app/apm_backend
 
 # ---- Expose API port ----
 EXPOSE 8080

@@ -189,11 +189,22 @@ if(APM_ENABLE_TESTS)
     enable_testing()
     
     # Find GTest
-    find_package(GTest)
+    find_package(GTest QUIET)
     
     if(NOT GTest_FOUND)
-        message(WARNING "GTest not found. Install GTest or set -DBUILD_TESTING=OFF to skip tests.")
-        set(APM_ENABLE_TESTS OFF)
+        message(STATUS "GTest not found. Fetching googletest...")
+        include(FetchContent)
+        set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        FetchContent_Declare(
+            googletest
+            URL https://github.com/google/googletest/archive/refs/tags/release-1.12.1.zip
+        )
+        FetchContent_MakeAvailable(googletest)
+        if(NOT TARGET GTest::gtest)
+            message(WARNING "Failed to fetch googletest. Install GTest or set -DBUILD_TESTING=OFF to skip tests.")
+            set(APM_ENABLE_TESTS OFF)
+        endif()
     endif()
     
 endif()

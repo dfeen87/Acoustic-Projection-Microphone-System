@@ -80,7 +80,7 @@ jobs:
         cmake -B build \
           -G Ninja \
           -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-          -DBUILD_TESTS=ON \
+          -DBUILD_TESTING=ON \
           -DBUILD_BENCHMARKS=ON \
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
     

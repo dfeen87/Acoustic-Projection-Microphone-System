@@ -26,7 +26,13 @@ RUN cmake -B build \
     -DENABLE_LOCAL_TRANSLATION=OFF \
     -DENABLE_ENCRYPTION=OFF \
     -DENABLE_TFLITE=OFF \
- && cmake --build build --verbose -- -v
+ || (echo "----- CMake configure failed -----" \
+     && cat build/CMakeFiles/CMakeOutput.log \
+     && cat build/CMakeFiles/CMakeError.log \
+     && exit 1)
+
+RUN cmake --build build --verbose -- -v
+
 
 # ============================
 # Stage 2 — Runtime (FastAPI + APM)

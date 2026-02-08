@@ -28,12 +28,14 @@ struct TranslationResult {
 class LocalTranslationEngine {
 public:
     struct Config {
+        std::string script_path = "scripts/translation_bridge.py";
         std::string whisper_model_path = "./models/whisper-small";
         std::string nllb_model_path = "./models/nllb-200-distilled-600M";
         std::string source_language = "en";
         std::string target_language = "es";
         bool use_gpu = true;
         int num_threads = 4;
+        bool offline_mode = true;
     };
 
     explicit LocalTranslationEngine(const Config& config);

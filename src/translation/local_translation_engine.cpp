@@ -170,10 +170,15 @@ public:
 
             // Step 2: Call Python translation bridge
             std::ostringstream cmd;
+            if (config_.offline_mode) {
+                cmd << "APM_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 ";
+            }
             cmd << python_cmd_ << " " << config_.script_path
                 << " " << temp_wav
                 << " --source " << config_.source_language
                 << " --target " << config_.target_language
+                << " --whisper-model " << config_.whisper_model_path
+                << " --nllb-model " << config_.nllb_model_path
                 << " --json"
                 << " 2>/dev/null"; // Suppress stderr
             

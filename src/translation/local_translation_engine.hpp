@@ -39,6 +39,7 @@ public:
         std::string whisper_model_path{"small"};
         std::string nllb_model_path{"facebook/nllb-200-distilled-600M"};
         bool use_gpu{true};
+        bool offline_mode{true};
     };
 
     /**

@@ -14,7 +14,7 @@ option(ENABLE_COVERAGE "Enable coverage reporting" OFF)
 option(ENABLE_LOCAL_TRANSLATION "Enable local Whisper+NLLB translation" ON)
 option(ENABLE_ENCRYPTION "Enable encryption support" ON)
 
-set(APM_ENABLE_TESTS ${BUILD_TESTING})
+set(APM_ENABLE_TESTS ${BUILD_TESTS})
 
 # Coverage support
 if(ENABLE_COVERAGE)

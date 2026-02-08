@@ -80,6 +80,7 @@ configure_file(
 
 set(APM_CORE_SOURCES
     src/apm_core.cpp
+    src/core/apm_system.cpp
     src/ptt_controller.cpp
     src/call_signaling.cpp
 )

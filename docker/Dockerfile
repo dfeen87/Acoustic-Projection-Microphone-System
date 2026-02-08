@@ -3,23 +3,28 @@
 # ============================
 FROM ubuntu:22.04 AS builder
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
     ninja-build \
-    libfftw3-dev \
-    libfftw3-single3 \
     git \
+    libfftw3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY . .
 
+# 🔒 Explicitly disable optional features for container build
 RUN cmake -B build \
     -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_TESTS=OFF \
     -DBUILD_BENCHMARKS=OFF \
+    -DENABLE_LOCAL_TRANSLATION=OFF \
+    -DENABLE_ENCRYPTION=OFF \
+    -DENABLE_TFLITE=OFF \
     && cmake --build build -j$(nproc)
 
 # ============================
@@ -27,18 +32,24 @@ RUN cmake -B build \
 # ============================
 FROM ubuntu:22.04 AS runtime
 
-# ---- System deps ----
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ---- System runtime deps only ----
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
-    libfftw3-dev \
-    libfftw3-single3 \
+    python3-venv \
+    libfftw3-3 \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# ---- Upgrade pip safely ----
+RUN python3 -m pip install --no-cache-dir --upgrade pip
+
 # ---- Python deps ----
-RUN pip3 install --no-cache-dir \
+RUN pip install --no-cache-dir \
     fastapi \
-    uvicorn[standard]
+    "uvicorn[standard]"
 
 WORKDIR /app
 

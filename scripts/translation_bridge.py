@@ -10,6 +10,8 @@ import sys
 import json
 from typing import Optional, Tuple
 
+import numpy as np
+import torch
 from pathlib import Path
 
 # Check if models are available
@@ -74,11 +76,6 @@ class LocalTranslationEngine:
             nllb_model: NLLB model from HuggingFace
             device: "cuda" or "cpu" (auto-detect if None)
         """
-        try:
-            import torch
-        except ImportError as exc:
-            raise RuntimeError("PyTorch is required for translation. Install torch first.") from exc
-
         self.offline = offline
         configure_offline_mode(self.offline)
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")

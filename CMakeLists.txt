@@ -27,13 +27,6 @@ if(ENABLE_COVERAGE)
     endif()
 endif()
 
-# Compiler warnings
-if(MSVC)
-    add_compile_options(/W4)
-else()
-    add_compile_options(-Wall -Wextra -Wpedantic)
-endif()
-
 # Threads
 find_package(Threads REQUIRED)
 
@@ -99,6 +92,13 @@ endif()
 
 add_library(apm_core STATIC ${APM_CORE_SOURCES})
 
+# Compiler warnings
+if(MSVC)
+    target_compile_options(apm_core PRIVATE /W4)
+else()
+    target_compile_options(apm_core PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 # FIXED: Use generator expressions for proper build/install interface
 target_include_directories(apm_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -106,8 +106,12 @@ target_include_directories(apm_core PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-# Allow includes from project root (for apm_system.h)
-include_directories(${CMAKE_SOURCE_DIR})
+# NOTE:
+# Avoid global include directories. If apm_system.h must be reachable,
+# prefer moving it under include/apm/ or add a scoped include below.
+target_include_directories(apm_core PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+)
 
 target_link_libraries(apm_core PUBLIC Threads::Threads)
 
@@ -203,7 +207,7 @@ if(APM_ENABLE_TESTS)
     
     # Core functionality tests
     add_executable(apm_test tests/test_apm_core.cpp)
-    target_link_libraries(apm_test PRIVATE apm_core gtest gtest_main)
+    target_link_libraries(apm_test PRIVATE apm_core GTest::gtest_main)
     add_test(NAME apm_core_test COMMAND apm_test)
     
     # Crypto tests (if enabled)

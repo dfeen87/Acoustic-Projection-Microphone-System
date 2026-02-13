@@ -1,0 +1,80 @@
+[
+{
+  "directory": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build",
+  "command": "/usr/bin/c++ -DHAVE_LOCAL_TRANSLATION=1 -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic -o CMakeFiles/apm_core.dir/src/apm_core.cpp.o -c /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/src/apm_core.cpp",
+  "file": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/src/apm_core.cpp",
+  "output": "CMakeFiles/apm_core.dir/src/apm_core.cpp.o"
+},
+{
+  "directory": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build",
+  "command": "/usr/bin/c++ -DHAVE_LOCAL_TRANSLATION=1 -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic -o CMakeFiles/apm_core.dir/src/core/apm_system.cpp.o -c /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/src/core/apm_system.cpp",
+  "file": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/src/core/apm_system.cpp",
+  "output": "CMakeFiles/apm_core.dir/src/core/apm_system.cpp.o"
+},
+{
+  "directory": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build",
+  "command": "/usr/bin/c++ -DHAVE_LOCAL_TRANSLATION=1 -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic -o CMakeFiles/apm_core.dir/src/ptt_controller.cpp.o -c /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/src/ptt_controller.cpp",
+  "file": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/src/ptt_controller.cpp",
+  "output": "CMakeFiles/apm_core.dir/src/ptt_controller.cpp.o"
+},
+{
+  "directory": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build",
+  "command": "/usr/bin/c++ -DHAVE_LOCAL_TRANSLATION=1 -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic -o CMakeFiles/apm_core.dir/src/call_signaling.cpp.o -c /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/src/call_signaling.cpp",
+  "file": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/src/call_signaling.cpp",
+  "output": "CMakeFiles/apm_core.dir/src/call_signaling.cpp.o"
+},
+{
+  "directory": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build",
+  "command": "/usr/bin/c++ -DHAVE_LOCAL_TRANSLATION=1 -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic -o CMakeFiles/apm_core.dir/src/local_translation_engine.cpp.o -c /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/src/local_translation_engine.cpp",
+  "file": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/src/local_translation_engine.cpp",
+  "output": "CMakeFiles/apm_core.dir/src/local_translation_engine.cpp.o"
+},
+{
+  "directory": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build",
+  "command": "/usr/bin/c++ -DHAVE_LOCAL_TRANSLATION=1 -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System -O3 -DNDEBUG -std=gnu++20 -o CMakeFiles/apm_backend.dir/src/core/main.cpp.o -c /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/src/core/main.cpp",
+  "file": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/src/core/main.cpp",
+  "output": "CMakeFiles/apm_backend.dir/src/core/main.cpp.o"
+},
+{
+  "directory": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build",
+  "command": "/usr/bin/c++ -DHAVE_LOCAL_TRANSLATION=1 -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System -O3 -DNDEBUG -std=gnu++20 -o CMakeFiles/translation_example.dir/examples/translation_example.cpp.o -c /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/examples/translation_example.cpp",
+  "file": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/examples/translation_example.cpp",
+  "output": "CMakeFiles/translation_example.dir/examples/translation_example.cpp.o"
+},
+{
+  "directory": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build",
+  "command": "/usr/bin/c++ -DHAVE_LOCAL_TRANSLATION=1 -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System -O3 -DNDEBUG -std=gnu++20 -o CMakeFiles/basic_example.dir/examples/basic_example.cpp.o -c /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/examples/basic_example.cpp",
+  "file": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/examples/basic_example.cpp",
+  "output": "CMakeFiles/basic_example.dir/examples/basic_example.cpp.o"
+},
+{
+  "directory": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build",
+  "command": "/usr/bin/c++ -DHAVE_LOCAL_TRANSLATION=1 -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System -isystem /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googletest/include -isystem /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googletest -O3 -DNDEBUG -std=gnu++20 -o CMakeFiles/apm_test.dir/tests/test_apm_core.cpp.o -c /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/tests/test_apm_core.cpp",
+  "file": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/tests/test_apm_core.cpp",
+  "output": "CMakeFiles/apm_test.dir/tests/test_apm_core.cpp.o"
+},
+{
+  "directory": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-build/googlemock",
+  "command": "/usr/bin/c++  -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googlemock/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googlemock -isystem /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googletest/include -isystem /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googletest -O3 -DNDEBUG -std=c++20 -Wall -Wshadow -Wundef -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -o CMakeFiles/gmock.dir/src/gmock-all.cc.o -c /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googlemock/src/gmock-all.cc",
+  "file": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googlemock/src/gmock-all.cc",
+  "output": "_deps/googletest-build/googlemock/CMakeFiles/gmock.dir/src/gmock-all.cc.o"
+},
+{
+  "directory": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-build/googlemock",
+  "command": "/usr/bin/c++  -isystem /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googlemock/include -isystem /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googlemock -isystem /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googletest/include -isystem /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googletest -O3 -DNDEBUG -std=c++20 -Wall -Wshadow -Wundef -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -o CMakeFiles/gmock_main.dir/src/gmock_main.cc.o -c /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googlemock/src/gmock_main.cc",
+  "file": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googlemock/src/gmock_main.cc",
+  "output": "_deps/googletest-build/googlemock/CMakeFiles/gmock_main.dir/src/gmock_main.cc.o"
+},
+{
+  "directory": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-build/googletest",
+  "command": "/usr/bin/c++  -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googletest/include -I/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googletest -O3 -DNDEBUG -std=c++20 -Wall -Wshadow -Wundef -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -o CMakeFiles/gtest.dir/src/gtest-all.cc.o -c /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googletest/src/gtest-all.cc",
+  "file": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googletest/src/gtest-all.cc",
+  "output": "_deps/googletest-build/googletest/CMakeFiles/gtest.dir/src/gtest-all.cc.o"
+},
+{
+  "directory": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-build/googletest",
+  "command": "/usr/bin/c++  -isystem /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googletest/include -isystem /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googletest -O3 -DNDEBUG -std=c++20 -Wall -Wshadow -Wundef -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -o CMakeFiles/gtest_main.dir/src/gtest_main.cc.o -c /home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googletest/src/gtest_main.cc",
+  "file": "/home/runner/work/Acoustic-Projection-Microphone-System/Acoustic-Projection-Microphone-System/build/_deps/googletest-src/googletest/src/gtest_main.cc",
+  "output": "_deps/googletest-build/googletest/CMakeFiles/gtest_main.dir/src/gtest_main.cc.o"
+}
+]

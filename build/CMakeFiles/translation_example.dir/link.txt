@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/translation_example.dir/link.d CMakeFiles/translation_example.dir/examples/translation_example.cpp.o -o translation_example  libapm_core.a

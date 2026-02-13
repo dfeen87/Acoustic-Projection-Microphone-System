@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/apm_test.dir/link.d CMakeFiles/apm_test.dir/tests/test_apm_core.cpp.o -o apm_test  libapm_core.a lib/libgtest_main.a lib/libgtest.a

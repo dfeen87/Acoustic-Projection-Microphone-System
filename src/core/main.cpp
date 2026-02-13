@@ -353,7 +353,7 @@ public:
     EchoCancellationEngine(int filter_len = 2048) 
         : filter_length_(filter_len) {
         adaptive_weights_.resize(filter_length_, 0.0f);
-        // Initialize deque with zeros (deque doesn't need pre-sizing)
+        // Deque will be populated dynamically during processing
     }
     
     AudioFrame cancel_echo(const AudioFrame& microphone,

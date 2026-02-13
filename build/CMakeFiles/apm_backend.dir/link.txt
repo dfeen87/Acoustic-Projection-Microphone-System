@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/apm_backend.dir/link.d CMakeFiles/apm_backend.dir/src/core/main.cpp.o -o apm_backend  libapm_core.a

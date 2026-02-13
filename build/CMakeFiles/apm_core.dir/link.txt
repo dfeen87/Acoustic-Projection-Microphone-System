@@ -1,2 +1,0 @@
-/usr/bin/ar qc libapm_core.a CMakeFiles/apm_core.dir/src/apm_core.cpp.o CMakeFiles/apm_core.dir/src/core/apm_system.cpp.o CMakeFiles/apm_core.dir/src/ptt_controller.cpp.o CMakeFiles/apm_core.dir/src/call_signaling.cpp.o CMakeFiles/apm_core.dir/src/local_translation_engine.cpp.o
-/usr/bin/ranlib libapm_core.a

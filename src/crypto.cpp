@@ -1,6 +1,7 @@
 #include "apm/crypto.hpp"
 #include <sodium.h>
 #include <fstream>
+#include <iostream>
 #include <cstring>
 #include <algorithm>
 
@@ -30,6 +31,9 @@ namespace {
                              b64.data(), b64.size(),
                              nullptr, &bin_len, nullptr,
                              sodium_base64_VARIANT_ORIGINAL) != 0) {
+            // Log error for debugging instead of silent failure
+            std::cerr << "Warning: Base64 decode failed for input of length " 
+                      << b64.size() << std::endl;
             return {};
         }
         result.resize(bin_len);

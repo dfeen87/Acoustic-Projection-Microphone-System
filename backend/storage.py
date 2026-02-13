@@ -1,12 +1,14 @@
 import sqlite3
 import time
 import uuid
+import threading
 from typing import Dict, List, Optional
 
 
 class Storage:
     def __init__(self, db_path: str = "backend/data.sqlite") -> None:
         self.db_path = db_path
+        self._db_lock = threading.Lock()  # Add lock for thread safety
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
@@ -15,38 +17,39 @@ class Storage:
         return conn
 
     def _init_db(self) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS peers (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    ip TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    last_seen REAL NOT NULL
+        with self._db_lock:  # Protect database initialization
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS peers (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        ip TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        last_seen REAL NOT NULL
+                    )
+                    """
                 )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS sessions (
-                    id TEXT PRIMARY KEY,
-                    peer_id TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    created_at REAL NOT NULL,
-                    updated_at REAL NOT NULL
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS sessions (
+                        id TEXT PRIMARY KEY,
+                        peer_id TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        created_at REAL NOT NULL,
+                        updated_at REAL NOT NULL
+                    )
+                    """
                 )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS metadata (
-                    key TEXT PRIMARY KEY,
-                    value TEXT NOT NULL
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS metadata (
+                        key TEXT PRIMARY KEY,
+                        value TEXT NOT NULL
+                    )
+                    """
                 )
-                """
-            )
-            conn.commit()
+                conn.commit()
 
     def get_metadata(self, key: str) -> Optional[str]:
         with self._connect() as conn:
@@ -56,12 +59,13 @@ class Storage:
             return row["value"] if row else None
 
     def set_metadata(self, key: str, value: str) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
-                (key, value),
-            )
-            conn.commit()
+        with self._db_lock:  # Protect write operation
+            with self._connect() as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
+                    (key, value),
+                )
+                conn.commit()
 
     def count_peers(self) -> int:
         with self._connect() as conn:
@@ -81,29 +85,31 @@ class Storage:
             return dict(row) if row else None
 
     def upsert_peer(self, peer: Dict[str, object]) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO peers (id, name, ip, status, last_seen)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    peer["id"],
-                    peer["name"],
-                    peer["ip"],
-                    peer["status"],
-                    peer["last_seen"],
-                ),
-            )
-            conn.commit()
+        with self._db_lock:  # Protect write operation
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO peers (id, name, ip, status, last_seen)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        peer["id"],
+                        peer["name"],
+                        peer["ip"],
+                        peer["status"],
+                        peer["last_seen"],
+                    ),
+                )
+                conn.commit()
 
     def update_peer_status(self, peer_id: str, status: str, last_seen: float) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                "UPDATE peers SET status = ?, last_seen = ? WHERE id = ?",
-                (status, last_seen, peer_id),
-            )
-            conn.commit()
+        with self._db_lock:  # Protect write operation
+            with self._connect() as conn:
+                conn.execute(
+                    "UPDATE peers SET status = ?, last_seen = ? WHERE id = ?",
+                    (status, last_seen, peer_id),
+                )
+                conn.commit()
 
     def ensure_local_peer(self) -> Dict[str, object]:
         local_id = self.get_metadata("local_peer_id")
@@ -165,21 +171,22 @@ class Storage:
             "created_at": now,
             "updated_at": now,
         }
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO sessions (id, peer_id, status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    session["id"],
-                    session["peer_id"],
-                    session["status"],
-                    session["created_at"],
-                    session["updated_at"],
-                ),
-            )
-            conn.commit()
+        with self._db_lock:  # Protect write operation
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO sessions (id, peer_id, status, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        session["id"],
+                        session["peer_id"],
+                        session["status"],
+                        session["created_at"],
+                        session["updated_at"],
+                    ),
+                )
+                conn.commit()
         return session
 
     def get_session(self, session_id: str) -> Optional[Dict[str, object]]:
@@ -190,40 +197,43 @@ class Storage:
             return dict(row) if row else None
 
     def update_session_status(self, session_id: str, status: str, updated_at: float) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                "UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?",
-                (status, updated_at, session_id),
-            )
-            conn.commit()
+        with self._db_lock:  # Protect write operation
+            with self._connect() as conn:
+                conn.execute(
+                    "UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?",
+                    (status, updated_at, session_id),
+                )
+                conn.commit()
 
     def mark_stale_sessions(self, timeout_seconds: float, now: Optional[float] = None) -> int:
         if now is None:
             now = time.time()
         threshold = now - timeout_seconds
-        with self._connect() as conn:
-            cursor = conn.execute(
-                """
-                UPDATE sessions
-                SET status = ?, updated_at = ?
-                WHERE status IN ('calling', 'ringing') AND updated_at <= ?
-                """,
-                ("timeout", now, threshold),
-            )
-            conn.commit()
-            return cursor.rowcount
+        with self._db_lock:  # Protect write operation
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE sessions
+                    SET status = ?, updated_at = ?
+                    WHERE status IN ('calling', 'ringing') AND updated_at <= ?
+                    """,
+                    ("timeout", now, threshold),
+                )
+                conn.commit()
+                return cursor.rowcount
 
     def purge_sessions(self, older_than_seconds: float, now: Optional[float] = None) -> int:
         if now is None:
             now = time.time()
         threshold = now - older_than_seconds
-        with self._connect() as conn:
-            cursor = conn.execute(
-                """
-                DELETE FROM sessions
-                WHERE status IN ('ended', 'timeout') AND updated_at <= ?
-                """,
-                (threshold,),
-            )
-            conn.commit()
-            return cursor.rowcount
+        with self._db_lock:  # Protect write operation
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    """
+                    DELETE FROM sessions
+                    WHERE status IN ('ended', 'timeout') AND updated_at <= ?
+                    """,
+                    (threshold,),
+                )
+                conn.commit()
+                return cursor.rowcount

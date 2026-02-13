@@ -54,6 +54,7 @@ class PeerDiscoveryService:
         self.local_peer: Optional[Peer] = None
         self.running = False
         self.broadcast_interval = 5  # seconds
+        self.heartbeat_interval = 5  # seconds - Fixed: was missing
         self.heartbeat_timeout = 15  # seconds
         self.cleanup_interval = 10  # seconds
         
@@ -90,7 +91,8 @@ class PeerDiscoveryService:
             ip = s.getsockname()[0]
             s.close()
             return ip
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to get local IP: {e}")
             return "127.0.0.1"
     
     async def _broadcast_presence(self):

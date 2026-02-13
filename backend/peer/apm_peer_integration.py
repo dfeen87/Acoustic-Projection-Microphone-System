@@ -132,7 +132,7 @@ class PeerDiscoveryClient:
         try:
             response = self.session.get(f"{self.api_base}/api/peers", timeout=2)
             return response.status_code == 200
-        except:
+        except Exception:
             return False
 
 

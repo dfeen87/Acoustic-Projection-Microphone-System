@@ -13,7 +13,7 @@
  */
 
 #include "apm/apm_system.h"
-#include "apm/local_translation_engine.hpp"
+#include "apm/translation/local_translation_engine.hpp"
 #include <iostream>
 #include <chrono>
 #include <thread>

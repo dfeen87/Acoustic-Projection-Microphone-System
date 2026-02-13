@@ -348,7 +348,8 @@ class APMControlPanel:
         try:
             hostname = socket.gethostname()
             local_ip = socket.gethostbyname(hostname)
-        except:
+        except Exception as e:
+            print(f"Warning: Failed to get system info: {e}")
             hostname = "Unknown"
             local_ip = "Unknown"
         
@@ -378,7 +379,7 @@ Translation:
         try:
             import whisper
             return True
-        except:
+        except ImportError:
             return False
     
     def check_nllb(self):
@@ -386,7 +387,7 @@ Translation:
         try:
             from transformers import AutoTokenizer
             return True
-        except:
+        except ImportError:
             return False
     
     def check_backend_connection(self):
@@ -401,7 +402,8 @@ Translation:
                         text="● Connected",
                         fg=self.accent_green
                     )
-                except:
+                except Exception as e:
+                    print(f"Backend connection check failed: {e}")
                     self.backend_connected = False
                     self.status_label.config(
                         text="● Disconnected",

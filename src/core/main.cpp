@@ -18,6 +18,7 @@
 #include <numeric>
 #include <stdexcept>
 #include <thread>
+#include <deque>
 
 // Compile-time safety assertions
 static_assert(sizeof(float) == 4, "APM assumes 32-bit float DSP");
@@ -345,14 +346,14 @@ public:
 class EchoCancellationEngine {
     int filter_length_;
     std::vector<float> adaptive_weights_;
-    std::vector<float> reference_buffer_;
+    std::deque<float> reference_buffer_;  // Changed to deque for O(1) push_front
     float mu_{0.3f}; // Step size for NLMS
     
 public:
     EchoCancellationEngine(int filter_len = 2048) 
         : filter_length_(filter_len) {
         adaptive_weights_.resize(filter_length_, 0.0f);
-        reference_buffer_.resize(filter_length_, 0.0f);
+        // Initialize deque with zeros (deque doesn't need pre-sizing)
     }
     
     AudioFrame cancel_echo(const AudioFrame& microphone,
@@ -371,8 +372,8 @@ public:
         size_t process_size = std::min(mic_samples.size(), ref_samples.size());
         
         for (size_t i = 0; i < process_size; ++i) {
-            // Update reference buffer
-            reference_buffer_.insert(reference_buffer_.begin(), ref_samples[i]);
+            // Update reference buffer (O(1) with deque)
+            reference_buffer_.push_front(ref_samples[i]);
             if (reference_buffer_.size() > static_cast<size_t>(filter_length_)) {
                 reference_buffer_.pop_back();
             }

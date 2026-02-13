@@ -297,7 +297,7 @@ EchoCancellationEngine::EchoCancellationEngine(int filter_len)
     : filter_length_(filter_len) {
 
     adaptive_weights_.resize(filter_length_, 0.0f);
-    reference_buffer_.resize(filter_length_, 0.0f);
+    // Deque does not need pre-sizing, will grow dynamically
 }
 
 AudioFrame EchoCancellationEngine::cancel_echo(
@@ -315,8 +315,8 @@ AudioFrame EchoCancellationEngine::cancel_echo(
 
     for (size_t i = 0; i < min_size; ++i) {
 
-        reference_buffer_.insert(
-            reference_buffer_.begin(), ref_samples[i]);
+        // Use push_front for O(1) insertion instead of vector insert
+        reference_buffer_.push_front(ref_samples[i]);
 
         if (reference_buffer_.size() > filter_length_) {
             reference_buffer_.pop_back();

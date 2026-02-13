@@ -8,6 +8,7 @@
 #include <memory>
 #include <numeric>
 #include <algorithm>
+#include <deque>
 
 namespace apm {
 
@@ -108,7 +109,7 @@ public:
 class EchoCancellationEngine {
     int filter_length_;
     std::vector<float> adaptive_weights_;
-    std::vector<float> reference_buffer_;
+    std::deque<float> reference_buffer_;  // Changed to deque for O(1) operations
     float mu_{0.3f};
 
 public:

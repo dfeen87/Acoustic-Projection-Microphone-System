@@ -16,6 +16,7 @@ Production-grade implementation of an advanced acoustic projection microphone sy
 - **Directional Audio Projection**: Phased array synthesis for targeted audio delivery
 - **High Performance**: FFTW-optimized FFT, multi-threaded processing, SIMD-ready
 - **Production Launcher**: Enterprise-grade startup system with automatic health checks and monitoring
+- **REST API with Global Node Access**: FastAPI-based REST API for peer discovery and session management across all network nodes
 
 ## 🌍 Local Translation (100% Private)
 
@@ -150,6 +151,67 @@ DEBUG=1 npm start
 # Combined
 APM_BACKEND_PORT=9000 DEBUG=1 npm start
 ```
+
+---
+
+## 🌐 REST API with Global Node Access
+
+The APM system includes a FastAPI-based REST API server that enables peer discovery and session management across all nodes in the network.
+
+### Quick Start - REST API Only
+
+Start the REST API server independently:
+
+```bash
+# Linux/Mac
+./scripts/start-api.sh
+
+# Windows
+scripts\start-api.bat
+
+# With custom configuration
+python3 backend/main.py --host 0.0.0.0 --port 8080
+```
+
+### Global Node Access
+
+By default, the API binds to **0.0.0.0**, making it accessible from any node in the network. This enables:
+
+- **Peer Discovery**: Other nodes can query this node's peer list
+- **Session Management**: Remote nodes can initiate and manage sessions
+- **Health Monitoring**: Network-wide health checks
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/api/peers` | GET | List all discovered peers |
+| `/api/peers/{peer_id}` | GET | Get specific peer details |
+| `/api/status` | POST | Update local peer status |
+| `/api/session` | POST | Create new session |
+| `/api/session/{session_id}` | GET | Get session status |
+| `/api/session/{session_id}/accept` | POST | Accept session |
+| `/api/session/{session_id}/end` | POST | End session |
+
+### Interactive API Documentation
+
+Once running, visit:
+- **Swagger UI**: http://localhost:8080/docs
+- **ReDoc**: http://localhost:8080/redoc
+
+### Configuration Options
+
+```bash
+# Environment variables
+export APM_API_HOST=0.0.0.0      # Global access (default)
+export APM_API_PORT=8080         # API port (default)
+
+# Command-line arguments
+python3 backend/main.py --host 0.0.0.0 --port 8080 --reload
+```
+
+**For complete REST API documentation, see [backend/README.md](backend/README.md)**
 
 ---
 

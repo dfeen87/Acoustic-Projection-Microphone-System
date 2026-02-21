@@ -12,9 +12,14 @@ Production-grade implementation of an advanced acoustic projection microphone sy
 - **Deep Noise Suppression**: LSTM-based neural network for speech enhancement
 - **Acoustic Echo Cancellation**: NLMS adaptive filter with double-talk detection
 - **Voice Activity Detection**: Energy and zero-crossing rate based VAD with hangover mechanism
-- **Real-time Translation**: TensorFlow Lite integration for speech-to-speech translation
+- **Real-time Translation**: Local Whisper + NLLB pipeline (200+ languages, fully offline); TensorFlow Lite engine also supported
 - **Directional Audio Projection**: Phased array synthesis for targeted audio delivery
-- **High Performance**: FFTW-optimized FFT, multi-threaded processing, SIMD-ready
+- **End-to-End Encryption**: ChaCha20-Poly1305 + X25519 key exchange via libsodium; Argon2id password-based key derivation and file encryption
+- **Push-to-Talk (PTT) Controller**: Hardware/software PTT with keyboard, mouse, external pedal, and software-controlled modes
+- **Call Signaling**: UDP-based call setup, teardown, and session management with peer discovery
+- **Real Audio I/O**: PortAudio integration for live microphone capture and speaker playback (when PortAudio is installed)
+- **WAV File I/O**: Read and write WAV files for offline processing and testing
+- **High Performance**: FFTW-optimized FFT with STFT support, multi-threaded processing, SIMD-ready
 - **Production Launcher**: Enterprise-grade startup system with automatic health checks and monitoring
 - **REST API with Global Node Access**: FastAPI-based REST API for peer discovery and session management across all network nodes
 
@@ -33,9 +38,9 @@ APM System includes **fully local speech recognition and translation** using sta
 
 ```bash
 # One-command setup
-./scripts/setup_translation.sh
+./scripts/setup.sh --full
 
-# Activate and test
+# Or step-by-step: activate venv and run translation bridge
 source venv/bin/activate
 python3 scripts/translation_bridge.py audio.wav --source en --target es
 Platform Notes
@@ -51,7 +56,7 @@ CI and Docker validate Linux builds; macOS builds are verified locally
 
 English, Spanish, French, German, Italian, Portuguese, Russian, Chinese, Japanese, Korean, Arabic, Hindi, and 180+ more.
 
-**See [TRANSLATION_QUICKSTART.md](TRANSLATION_QUICKSTART.md) for complete documentation.**
+**See [docs/translation/](docs/translation/) for complete translation documentation.**
 
 ---
 
@@ -95,18 +100,20 @@ Each component is defined exactly once to ensure clean builds across Linux and m
 ### Prerequisites
 
 - **Node.js 14+** (for launcher) - [Download](https://nodejs.org/)
-- **CMake 3.15+** - [Download](https://cmake.org/)
+- **CMake 3.18+** - [Download](https://cmake.org/)
 - **C++20 Compiler** - GCC 10+, Clang 11+, or MSVC 2019+
-- **FFTW3** - `sudo apt-get install libfftw3-dev` (Linux) or `brew install fftw` (Mac)
+- **FFTW3** (optional) - `sudo apt-get install libfftw3-dev` (Linux) or `brew install fftw` (Mac)
+- **libsodium** (optional, for encryption) - `sudo apt-get install libsodium-dev` (Linux) or `brew install libsodium` (Mac)
+- **PortAudio** (optional, for live audio I/O) - `sudo apt-get install portaudio19-dev` (Linux) or `brew install portaudio` (Mac)
 
 ### One-Command Launch
 
 ```bash
 # Linux/Mac
-./start-apm.sh
+./scripts/start-apm.sh
 
 # Windows
-start-apm.bat
+scripts\start-apm.bat
 ```
 
 That's it! The launcher will:
@@ -308,18 +315,42 @@ apm/
 │   └── README.md                # Launcher documentation
 ├── scripts/
 │   ├── healthcheck.js           # System validator
-│   └── setup_translation.sh     # Translation setup
+│   ├── setup.sh                 # Interactive/automated setup
+│   ├── start-apm.sh             # Unix/Mac launcher wrapper
+│   ├── start-apm.bat            # Windows launcher wrapper
+│   ├── start-api.sh             # REST API only (Unix/Mac)
+│   ├── start-api.bat            # REST API only (Windows)
+│   ├── translation_bridge.py    # Python Whisper+NLLB bridge
+│   └── user-setup.sh            # End-user setup helper
+├── src/
+│   ├── apm_core.cpp             # APMCore lightweight DSP + text fallback
+│   ├── ptt_controller.cpp       # Push-to-Talk controller
+│   ├── call_signaling.cpp       # UDP call signaling
+│   ├── crypto.cpp               # ChaCha20-Poly1305 / X25519 encryption
+│   ├── local_translation_engine.cpp  # Whisper+NLLB local translation
+│   ├── core/
+│   │   ├── main.cpp             # Backend entry point
+│   │   └── apm_system.cpp       # Full real-time pipeline
+│   ├── io/
+│   │   ├── audio_device.cpp     # PortAudio live I/O
+│   │   └── wav_io.cpp           # WAV file read/write
+│   └── translation/
+│       └── local_translation_adapter.cpp
+├── include/apm/                 # Public C++ API headers
 ├── tests/
-│   └── integration.test.js      # Integration tests
+│   ├── test_apm_core.cpp        # Core unit tests (GTest)
+│   ├── test_crypto.cpp          # Encryption unit tests
+│   └── integration/
+│       └── integration.test.js  # Node.js integration tests
+├── backend/                     # Python FastAPI REST server
+├── ui/
+│   └── apm-dashboard.html       # Web dashboard UI
+├── docs/                        # Extended documentation
+├── examples/                    # Example programs
 ├── build/                       # CMake build directory
-│   └── apm_backend             # Compiled backend (or .exe)
-├── apm-dashboard.html          # Web UI
-├── usePeerDiscovery.js         # Network discovery
-├── main.cpp                    # Backend entry point
-├── start-apm.sh               # Unix/Mac launcher
-├── start-apm.bat              # Windows launcher
-├── CMakeLists.txt             # Build configuration
-└── .gitignore                 # Git exclusions
+│   └── apm_backend              # Compiled backend (or .exe)
+├── CMakeLists.txt               # Build configuration
+└── .gitignore                   # Git exclusions
 ```
 
 ---
@@ -358,8 +389,7 @@ WORKDIR /app
 COPY --from=launcher /app/node_modules ./launcher/node_modules
 COPY --from=backend /app/build/apm_backend ./apm_backend
 COPY launcher/apm_launcher.js ./launcher/
-COPY apm-dashboard.html ./
-COPY usePeerDiscovery.js ./
+COPY ui/apm-dashboard.html ./ui/
 
 EXPOSE 8080 4173
 CMD ["node", "launcher/apm_launcher.js"]
@@ -434,7 +464,7 @@ A: Ensure speaker reference signal is provided. Check for timing synchronization
 
 1. **Check logs**: Enable debug mode with `DEBUG=1 npm start`
 2. **Run health check**: `node scripts/healthcheck.js`
-3. **Verify prerequisites**: Node.js 14+, CMake 3.15+, C++20 compiler
+3. **Verify prerequisites**: Node.js 14+, CMake 3.18+, C++20 compiler
 4. **Check ports**: Ensure 8080 and 4173 are available
 
 ---
@@ -460,6 +490,26 @@ Memory usage:
 ---
 
 ## 💻 API Documentation
+
+### Public Facade
+
+#### `APMCore`
+Lightweight public facade for initializing the system and performing audio processing and text translation. Suitable for embedding.
+
+```cpp
+APMCore core;
+core.initialize(48000, 1);           // sample_rate, num_channels
+core.set_source_language("en");
+core.set_target_language("es");
+
+std::vector<float> out = core.process(input_samples);
+
+APMCore::TextTranslationResult r = core.translate_text("Hello");
+// r.success, r.translated_text, r.processing_time_ms
+```
+
+> **Note**: The C++ text fallback in `APMCore` supports only `en→es` and `en→fr`.
+> Full 200+ language support requires the Python translation bridge (`scripts/translation_bridge.py`).
 
 ### Core Classes
 
@@ -511,6 +561,7 @@ AudioFrame cancel_echo(
 );
 
 bool detect_double_talk(const AudioFrame& mic, const AudioFrame& ref);
+void reset();  // Reset adaptive filter weights and reference buffer
 ```
 
 #### `VoiceActivityDetector`
@@ -526,6 +577,7 @@ struct VadResult {
 
 VadResult detect(const AudioFrame& frame);
 void adapt_threshold(float ambient_noise_db);
+void reset();  // Reset hangover counter
 ```
 
 #### `FFTProcessor`
@@ -548,15 +600,17 @@ Complete processing pipeline.
 
 ```cpp
 struct Config {
-    int num_microphones;
-    float mic_spacing_m;
-    int num_speakers;
-    float speaker_spacing_m;
-    std::string source_language;
-    std::string target_language;
+    int num_microphones = 4;
+    float mic_spacing_m = 0.012f;
+    int num_speakers = 3;
+    float speaker_spacing_m = 0.015f;
+    int sample_rate = 48000;
+    std::string source_language = "en-US";
+    std::string target_language = "es-ES";
 };
 
 APMSystem(const Config& config);
+APMSystem();  // Default constructor (uses Config defaults)
 
 std::vector<AudioFrame> process(
     const std::vector<AudioFrame>& microphone_array,
@@ -565,6 +619,23 @@ std::vector<AudioFrame> process(
 );
 
 std::future<std::vector<AudioFrame>> process_async(...);
+void reset_all();  // Reset echo canceller, noise suppressor, and VAD state
+```
+
+#### `FFTProcessor`
+High-performance FFT using FFTW (only available when built with FFTW3; throws at runtime otherwise).
+
+```cpp
+FFTProcessor(int size);
+
+void forward(const std::vector<float>& input,
+            std::vector<std::complex<float>>& output);
+
+void inverse(const std::vector<std::complex<float>>& input,
+            std::vector<float>& output);
+
+static void apply_window(std::vector<float>& data, WindowType type);
+// WindowType: Hann, Hamming, Blackman, Kaiser
 ```
 
 ---
@@ -573,23 +644,23 @@ std::future<std::vector<AudioFrame>> process_async(...);
 
 ```bash
 # Run all tests
-cd build && ctest
+cd build && ctest --output-on-failure
 
 # Run specific test suite
-./apm_tests --gtest_filter=BeamformingTest.*
+./apm_test --gtest_filter=BeamformingTest.*
 
 # Run with detailed output
-./apm_tests --gtest_output=xml:test_results.xml
+./apm_test --gtest_output=xml:test_results.xml
 
 # Memory leak check
-valgrind --leak-check=full ./apm_tests
+valgrind --leak-check=full ./apm_test
 
 # Performance profiling
 perf record ./apm_bench
 perf report
 
 # Integration tests
-node tests/integration.test.js
+node tests/integration/integration.test.js
 ```
 
 Test coverage: 87% (lines), 92% (functions)
@@ -624,7 +695,8 @@ config.mic_spacing_m = 0.010f;
 // Language support
 config.source_language = "en-US";  // English
 config.target_language = "es-ES";  // Spanish
-// Supported: en-US, es-ES, ja-JP, fr-FR, de-DE, zh-CN
+// APMSystem accepts any IETF language tag; 200+ languages available via Python bridge
+// C++ text fallback (APMCore) supports: en→es, en→fr
 ```
 
 ### Environment Variables
@@ -670,7 +742,7 @@ Contributions welcome! Please:
 - RAM: 512MB
 - Disk: 100MB
 - Node.js: 14.0.0+
-- CMake: 3.15+
+- CMake: 3.18+
 
 ### Recommended
 - CPU: 4+ cores with AVX2
@@ -694,16 +766,20 @@ Now that the full APM pipeline builds cleanly and launches reliably, the next ph
 - **Production launcher with health monitoring**
 - **Automated testing and validation**
 - **Cross-platform startup scripts**
+- **End-to-end encryption** (ChaCha20-Poly1305 + X25519 via libsodium)
+- **Push-to-Talk (PTT) controller** with keyboard/mouse/external/software modes
+- **UDP call signaling** with peer discovery and session management
+- **PortAudio real audio I/O** (live microphone and speaker support)
+- **Local Whisper + NLLB translation** (200+ languages, fully offline)
 
 ### 🚀 Next Milestones
 
 See [ROADMAP.md](ROADMAP.md) for detailed roadmap including:
 
-1. **Real Audio I/O** - PortAudio/RtAudio integration, ring buffers
-2. **Translation Backend Upgrade** - Real ASR → NMT → TTS chain
+1. **Ring buffers & low-latency audio pipeline** - Continuous real-time capture with PortAudio
+2. **TTS integration** - Complete ASR → NMT → TTS speech-to-speech chain
 3. **DSP Optimization** - SIMD acceleration, FFT-based beamforming
-4. **System Architecture** - Modular headers, comprehensive tests
-5. **Developer Experience** - CLI tools, config presets, documentation
+4. **Developer Experience** - CLI tools, config presets, documentation
 
 ---
 
@@ -759,4 +835,4 @@ If you use this work in research, please cite:
 
 ---
 
-**Status**: Production Ready | **Version**: 1.0.0 | **Last Updated**: December 2025
+**Status**: Production Ready | **Version**: 2.0.0 | **Last Updated**: December 2025

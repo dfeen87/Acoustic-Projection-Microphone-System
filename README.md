@@ -795,7 +795,7 @@ Copyright (c) 2025 Don Michael Feeney Jr.
 
 - **Author**: Don Michael Feeney Jr.
 - **Dedicated to**: Marcel Krüger
-- **Enhanced with**: Claude (Anthropic)
+- **Enhanced with**: Claude (Anthropic), Google (Jules), Microsoft (Copilot)
 - **FFT**: FFTW library by Matteo Frigo and Steven G. Johnson
 - **ML Framework**: TensorFlow Lite by Google
 

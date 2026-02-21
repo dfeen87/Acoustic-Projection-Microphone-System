@@ -67,6 +67,27 @@ else()
     set(HAVE_ENCRYPTION OFF)
 endif()
 
+# PortAudio
+find_package(PkgConfig)
+pkg_check_modules(PORTAUDIO portaudio-2.0)
+
+if(NOT PORTAUDIO_FOUND)
+    find_library(PORTAUDIO_LIBRARY NAMES portaudio)
+    find_path(PORTAUDIO_INCLUDE_DIR NAMES portaudio.h)
+    if(PORTAUDIO_LIBRARY AND PORTAUDIO_INCLUDE_DIR)
+        set(PORTAUDIO_FOUND ON)
+        set(PORTAUDIO_LIBRARIES ${PORTAUDIO_LIBRARY})
+        set(PORTAUDIO_INCLUDE_DIRS ${PORTAUDIO_INCLUDE_DIR})
+    endif()
+endif()
+
+if(PORTAUDIO_FOUND)
+    message(STATUS "PortAudio found")
+else()
+    message(WARNING "PortAudio not found - Real Audio I/O disabled")
+    message(WARNING "Install: apt-get install portaudio19-dev (Ubuntu) or brew install portaudio (macOS)")
+endif()
+
 # Generate config header
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/include/apm/config.h.in"
@@ -84,9 +105,17 @@ set(APM_CORE_SOURCES
     src/call_signaling.cpp
 )
 
+# Add PortAudio audio device if found
+if(PORTAUDIO_FOUND)
+    list(APPEND APM_CORE_SOURCES src/io/audio_device.cpp)
+endif()
+
 # Add local translation engine if enabled
 if(ENABLE_LOCAL_TRANSLATION)
-    list(APPEND APM_CORE_SOURCES src/local_translation_engine.cpp)
+    list(APPEND APM_CORE_SOURCES
+        src/local_translation_engine.cpp
+        src/translation/local_translation_adapter.cpp
+    )
     message(STATUS "Local translation enabled (Whisper + NLLB)")
 endif()
 
@@ -120,6 +149,13 @@ target_include_directories(apm_core PUBLIC
 )
 
 target_link_libraries(apm_core PUBLIC Threads::Threads)
+
+# Optional: link PortAudio if present
+if(PORTAUDIO_FOUND)
+    target_include_directories(apm_core PUBLIC ${PORTAUDIO_INCLUDE_DIRS})
+    target_link_libraries(apm_core PUBLIC ${PORTAUDIO_LIBRARIES})
+    target_compile_definitions(apm_core PUBLIC HAVE_PORTAUDIO=1)
+endif()
 
 # Optional: link FFTW if present
 if(HAVE_FFTW3)

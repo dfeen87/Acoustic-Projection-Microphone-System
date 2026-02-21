@@ -4,6 +4,10 @@
 // ============================================================================
 
 #include "apm/apm_system.h"
+#include "apm/config.h"
+#ifdef HAVE_LOCAL_TRANSLATION
+#include "apm/translation/local_translation_adapter.h"
+#endif
 #include <iostream>
 #include <algorithm>
 #include <cmath>
@@ -151,7 +155,7 @@ AudioFrame BeamformingEngine::superdirective(
 AudioFrame BeamformingEngine::adaptive_null_steering(
     const std::vector<AudioFrame>& mic_array,
     float target_azimuth,
-    const std::vector<float>& interference_azimuths) {
+    const std::vector<float>& /* interference_azimuths */) {
 
     return delay_and_sum(mic_array, target_azimuth, 0.0f);
 }
@@ -318,7 +322,7 @@ AudioFrame EchoCancellationEngine::cancel_echo(
         // Use push_front for O(1) insertion instead of vector insert
         reference_buffer_.push_front(ref_samples[i]);
 
-        if (reference_buffer_.size() > filter_length_) {
+        if (reference_buffer_.size() > static_cast<size_t>(filter_length_)) {
             reference_buffer_.pop_back();
         }
 
@@ -533,11 +537,31 @@ DirectionalProjector::create_projection_signals(
 // ============================================================================
 
 APMSystem::APMSystem(const Config& cfg)
-    : beamformer_(cfg.num_microphones, cfg.mic_spacing_m),
+    : config_(cfg),
+      beamformer_(cfg.num_microphones, cfg.mic_spacing_m),
       echo_canceller_(2048),
-      projector_(cfg.num_speakers, cfg.speaker_spacing_m),
-      translator_(std::make_unique<MockTranslationEngine>()),
-      config_(cfg) {}
+      projector_(cfg.num_speakers, cfg.speaker_spacing_m) {
+
+#ifdef HAVE_LOCAL_TRANSLATION
+    try {
+        LocalTranslationEngine::Config trans_config;
+        trans_config.source_language = cfg.source_language.substr(0, 2); // Extract 'en' from 'en-US'
+        trans_config.target_language = cfg.target_language.substr(0, 2);
+
+        translator_ = std::make_unique<LocalTranslationAdapter>(trans_config);
+        std::cout << "APMSystem: Initialized Local Translation Engine ("
+                  << trans_config.source_language << " -> "
+                  << trans_config.target_language << ")" << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "APMSystem: Failed to initialize Local Translation Engine: " << e.what() << std::endl;
+        std::cerr << "APMSystem: Falling back to Mock Translation Engine" << std::endl;
+        translator_ = std::make_unique<MockTranslationEngine>();
+    }
+#else
+    translator_ = std::make_unique<MockTranslationEngine>();
+    std::cout << "APMSystem: Using Mock Translation Engine (Local translation disabled)" << std::endl;
+#endif
+}
 
 std::future<std::vector<AudioFrame>>
 APMSystem::process_async(
@@ -560,8 +584,6 @@ std::vector<AudioFrame> APMSystem::process(
     const AudioFrame& speaker_reference,
     float target_direction_rad) {
 
-    auto t0 = std::chrono::steady_clock::now();
-
     // ---- DSP PIPELINE ONLY ----
     auto beamformed =
         beamformer_.delay_and_sum(
@@ -580,8 +602,6 @@ std::vector<AudioFrame> APMSystem::process(
 
     auto vad_result =
         vad_.detect(denoised);
-
-    auto t1 = std::chrono::steady_clock::now();
 
     if (!vad_result.speech_detected) {
         return {};

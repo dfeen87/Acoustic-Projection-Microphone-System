@@ -12,6 +12,7 @@
 #cmakedefine HAVE_LOCAL_TRANSLATION
 #cmakedefine HAVE_TFLITE
 #cmakedefine HAVE_ENCRYPTION
+#cmakedefine HAVE_PORTAUDIO
 
 // Platform detection
 #if defined(_WIN32) || defined(_WIN64)
@@ -57,6 +58,13 @@ constexpr bool has_tflite =
 
 constexpr bool has_encryption =
 #ifdef HAVE_ENCRYPTION
+    true;
+#else
+    false;
+#endif
+
+constexpr bool has_portaudio =
+#ifdef HAVE_PORTAUDIO
     true;
 #else
     false;

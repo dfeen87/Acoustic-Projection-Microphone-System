@@ -113,7 +113,7 @@ function startLauncher() {
   return new Promise((resolve, reject) => {
     log.info("Starting launcher for integration tests...");
 
-    const launcherPath = path.join(__dirname, "../launcher/apm_launcher.js");
+    const launcherPath = path.join(__dirname, "../../launcher/apm_launcher.js");
     const proc = spawn("node", [launcherPath], {
       env: {
         ...process.env,

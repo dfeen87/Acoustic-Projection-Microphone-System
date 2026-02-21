@@ -3,7 +3,7 @@
  * @brief Integration test for C++ <-> Python translation bridge
  */
 
-#include "apm/local_translation_engine.hpp"
+#include "apm/translation/local_translation_engine.hpp"
 #include <iostream>
 #include <cassert>
 #include <cmath>

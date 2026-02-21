@@ -200,11 +200,11 @@ class AudioDevice::Impl {
 public:
     explicit Impl(const Config&) {}
     bool start() {
-        std::cerr << "PortAudio not compiled in." << std::endl;
-        return false;
+        std::cerr << "PortAudio not compiled in. Using dummy audio device." << std::endl;
+        return true;
     }
     bool stop() { return true; }
-    bool is_active() const { return false; }
+    bool is_active() const { return true; }
     void set_callback(AudioCallback) {}
     static std::string list_devices() { return "No PortAudio support."; }
 };

@@ -105,10 +105,8 @@ set(APM_CORE_SOURCES
     src/call_signaling.cpp
 )
 
-# Add PortAudio audio device if found
-if(PORTAUDIO_FOUND)
-    list(APPEND APM_CORE_SOURCES src/io/audio_device.cpp)
-endif()
+# Add PortAudio audio device (always added, internal ifdef handles missing PA)
+list(APPEND APM_CORE_SOURCES src/io/audio_device.cpp)
 
 # Add local translation engine if enabled
 if(ENABLE_LOCAL_TRANSLATION)
@@ -261,8 +259,8 @@ if(APM_ENABLE_TESTS)
     endif()
 
     # Translation integration tests
-    if(ENABLE_LOCAL_TRANSLATION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_translation_integration.cpp)
-        add_executable(test_translation tests/test_translation_integration.cpp)
+    if(ENABLE_LOCAL_TRANSLATION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_translation_integration.cpp)
+        add_executable(test_translation tests/integration/test_translation_integration.cpp)
         target_link_libraries(test_translation PRIVATE apm_core Threads::Threads)
         add_test(NAME translation_integration_test COMMAND test_translation)
     endif()

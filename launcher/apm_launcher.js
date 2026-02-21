@@ -13,8 +13,11 @@ const CONFIG = {
   HEALTH_CHECK_INTERVAL: 300,   // Check every 300ms
   STARTUP_DELAY: 500,           // Initial delay before health checks
   MAX_RETRIES: 3,
-  BACKEND_EXECUTABLE: process.platform === "win32" ? "apm_backend.exe" : "./apm_backend",
+  // Updated to launch Python backend which provides the API
+  BACKEND_EXECUTABLE: process.platform === "win32" ? "python" : "python3",
+  BACKEND_ARGS: ["backend/main.py"],
   UI_HTML_PATHS: [
+    path.join(__dirname, "../ui/index.html"),
     path.join(__dirname, "../apm-dashboard.html"),
     path.join(__dirname, "../ui/apm-dashboard.html")
   ]
@@ -42,27 +45,13 @@ const logger = {
 function validateEnvironment() {
   logger.info("Validating environment...");
 
-  // Check backend executable
-  const backendPath = path.join(__dirname, "..", CONFIG.BACKEND_EXECUTABLE);
-  if (!fs.existsSync(backendPath)) {
+  // Check backend path
+  // Since we are running python, we check for the script existence
+  const scriptPath = path.join(__dirname, "..", CONFIG.BACKEND_ARGS[0]);
+  if (!fs.existsSync(scriptPath)) {
     throw new Error(
-      `Backend executable not found at: ${backendPath}\n` +
-      `Please build the backend first:\n` +
-      `  cmake -B build\n` +
-      `  cmake --build build`
+      `Backend script not found at: ${scriptPath}\n`
     );
-  }
-
-  // Check if executable (Unix-like systems)
-  if (process.platform !== "win32") {
-    try {
-      fs.accessSync(backendPath, fs.constants.X_OK);
-    } catch (err) {
-      throw new Error(
-        `Backend executable exists but is not executable: ${backendPath}\n` +
-        `Run: chmod +x ${backendPath}`
-      );
-    }
   }
 
   // Check UI HTML file
@@ -163,20 +152,26 @@ function startBackend() {
   return new Promise((resolve, reject) => {
     logger.info("Starting C++ backend...");
     
-    const backendPath = path.resolve(__dirname, "..", CONFIG.BACKEND_EXECUTABLE);
-    const workingDir = path.dirname(backendPath);
+    // We launch python backend/main.py
+    // The working directory should be the repo root
+    const workingDir = path.resolve(__dirname, "..");
+    const command = CONFIG.BACKEND_EXECUTABLE;
+    const args = [...CONFIG.BACKEND_ARGS];
 
-    logger.info(`Executable: ${backendPath}`);
+    // Add port argument if needed, backend/main.py supports --port
+    args.push("--port", CONFIG.BACKEND_PORT.toString());
+
+    logger.info(`Command: ${command} ${args.join(" ")}`);
     logger.info(`Working directory: ${workingDir}`);
     logger.info(`Backend port: ${CONFIG.BACKEND_PORT}`);
 
     try {
-      const proc = spawn(backendPath, [], {
+      const proc = spawn(command, args, {
         stdio: ["ignore", "pipe", "pipe"],
         cwd: workingDir,
         env: {
           ...process.env,
-          APM_PORT: CONFIG.BACKEND_PORT.toString()
+          // Python backend reads args, but we can pass env just in case
         }
       });
 

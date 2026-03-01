@@ -799,6 +799,8 @@ Copyright (c) 2025 Don Michael Feeney Jr.
 - **FFT**: FFTW library by Matteo Frigo and Steven G. Johnson
 - **ML Framework**: TensorFlow Lite by Google
 
+I would like to acknowledge **Microsoft Copilot**, **Anthropic Claude**, **Google Jules**, and **OpenAI ChatGPT** for their meaningful assistance in refining concepts, improving clarity, and strengthening the overall quality of this code.
+
 ---
 
 ## 📚 References

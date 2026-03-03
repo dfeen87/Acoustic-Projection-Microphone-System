@@ -1,6 +1,5 @@
 # Acoustic Projection Microphone (APM) System
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/)
 
@@ -783,11 +782,10 @@ See [ROADMAP.md](ROADMAP.md) for detailed roadmap including:
 
 ---
 
-## 📄 License
+## ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
-
-Copyright (c) 2025 Don Michael Feeney Jr.
+This project is available for **non‑commercial use only** under the terms of the included LICENSE file.  
+Commercial use requires a separate paid license.
 
 ---
 

@@ -1,26 +1,29 @@
 # APM System - Local Translation Dependencies
 # 100% local processing - no cloud APIs required
 # Install with: pip install -r requirements-translation.txt
+#
+# Pinning strategy: all versions are pinned with == for reproducible builds.
+# Update pins intentionally after testing; do not use >= in production.
 
 # ============================================================================
 # CORE DEPENDENCIES
 # ============================================================================
 
 # PyTorch (CPU version - for GPU, see instructions below)
-torch>=2.0.0
-torchaudio>=2.0.0
+torch==2.6.0
+torchaudio==2.6.0
 
 # Whisper for speech recognition (OpenAI)
-openai-whisper>=20231117
+openai-whisper==20231117
 
 # NLLB for translation (Meta, 200+ languages)
-transformers>=4.30.0
-sentencepiece>=0.1.99
-protobuf>=3.20.0
+transformers==4.48.0
+sentencepiece==0.2.1
+protobuf==5.29.6
 
 # Audio and numerical processing
-numpy>=1.24.0
-scipy>=1.10.0
+numpy==1.26.4
+scipy==1.13.0
 
 # ============================================================================
 # OPTIONAL: GPU ACCELERATION (CUDA)

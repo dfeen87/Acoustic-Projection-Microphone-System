@@ -10,18 +10,38 @@
 #include <memory>
 #include <random>
 #include <chrono>
+#include <climits>
+#include <filesystem>
 
 namespace simple_json {
+    // Extracts a string field value from a JSON object.
+    // Returns an empty string if the field is not found or if the value is
+    // not a properly-terminated quoted string (parse failure).
     std::string extract_field(const std::string& json, const std::string& field) {
         std::string search = "\"" + field + "\":";
         size_t pos = json.find(search);
         if (pos == std::string::npos) return "";
 
         pos += search.length();
-        while (pos < json.length() && (json[pos] == ' ' || json[pos] == '"')) pos++;
+        // Skip whitespace before the opening quote
+        while (pos < json.length() && json[pos] == ' ') pos++;
 
-        size_t end = json.find('"', pos);
-        if (end == std::string::npos) return "";
+        // Value must start with a quote
+        if (pos >= json.length() || json[pos] != '"') return "";
+        pos++; // skip opening quote
+
+        // Find closing quote, respecting escaped quotes
+        size_t end = pos;
+        while (end < json.length()) {
+            if (json[end] == '\\') {
+                if (end + 1 >= json.length()) return ""; // truncated escape sequence
+                end += 2; // skip escaped character
+                continue;
+            }
+            if (json[end] == '"') break;
+            end++;
+        }
+        if (end >= json.length()) return ""; // unterminated string
 
         return json.substr(pos, end - pos);
     }
@@ -46,16 +66,29 @@ std::string generate_temp_filename() {
 
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(1000, 9999);
+    // Use a wider range for better uniqueness
+    std::uniform_int_distribution<uint32_t> dis(100000, 999999);
 
-    std::ostringstream oss;
-    oss << "/tmp/apm_audio_" << ms << "_" << dis(gen) << ".wav";
-    return oss.str();
+    // Use std::filesystem::temp_directory_path() for cross-platform support.
+    // Caller (translate()) is responsible for removing the file after use.
+    std::filesystem::path tmp_path =
+        std::filesystem::temp_directory_path() /
+        ("apm_audio_" + std::to_string(ms) + "_" + std::to_string(dis(gen)) + ".wav");
+    return tmp_path.string();
 }
 
 bool write_wav_file(const std::string& filename,
                    const std::vector<float>& samples,
                    int sample_rate) {
+    // Guard against WAV header overflow: the data chunk size and file size are
+    // stored as uint32_t in the WAV header, so they must not exceed UINT32_MAX.
+    const size_t raw_data_bytes = samples.size() * sizeof(int16_t);
+    if (raw_data_bytes > static_cast<size_t>(UINT32_MAX) - 36) {
+        std::cerr << "ERROR: Audio data too large for WAV format ("
+                  << raw_data_bytes << " bytes)" << std::endl;
+        return false;
+    }
+
     std::ofstream file(filename, std::ios::binary);
     if (!file) return false;
 
@@ -63,8 +96,8 @@ bool write_wav_file(const std::string& filename,
     const int bits_per_sample = 16;
     const int byte_rate = sample_rate * num_channels * bits_per_sample / 8;
     const int block_align = num_channels * bits_per_sample / 8;
-    const int data_size = samples.size() * sizeof(int16_t);
-    const int file_size = 36 + data_size;
+    const uint32_t data_size = static_cast<uint32_t>(raw_data_bytes);
+    const uint32_t file_size = 36 + data_size;
 
     file.write("RIFF", 4);
     file.write(reinterpret_cast<const char*>(&file_size), 4);

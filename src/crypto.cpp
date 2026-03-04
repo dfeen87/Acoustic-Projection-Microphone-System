@@ -1,15 +1,17 @@
-#include "apm/crypto.hpp"
+#include "apm/crypto/crypto.hpp"
 #include <sodium.h>
 #include <fstream>
 #include <iostream>
 #include <cstring>
 #include <algorithm>
+#include <mutex>
 
 namespace apm {
 namespace crypto {
 
 namespace {
-    bool g_initialized = false;
+    std::once_flag g_init_flag;
+    std::atomic<bool> g_initialized{false};
     
     // Convert binary to base64
     std::string to_base64(const std::vector<uint8_t>& data) {
@@ -46,20 +48,24 @@ namespace {
 // ============================================================================
 
 bool initialize() {
-    if (g_initialized) {
+    if (g_initialized.load()) {
         return true;
     }
-    
-    if (sodium_init() < 0) {
-        return false;
-    }
-    
-    g_initialized = true;
-    return true;
+
+    bool success = true;
+    std::call_once(g_init_flag, [&success]() {
+        if (sodium_init() < 0) {
+            success = false;
+            return;
+        }
+        g_initialized.store(true);
+    });
+
+    return success && g_initialized.load();
 }
 
 bool is_initialized() {
-    return g_initialized;
+    return g_initialized.load();
 }
 
 // ============================================================================
@@ -84,7 +90,7 @@ Result<std::vector<uint8_t>> derive_key_from_password(
     const std::string& password,
     const std::vector<uint8_t>& salt_in
 ) {
-    if (!g_initialized) {
+    if (!g_initialized.load()) {
         return Result<std::vector<uint8_t>>::err("Crypto not initialized");
     }
     
@@ -120,7 +126,7 @@ Result<std::vector<uint8_t>> encrypt_symmetric(
     const std::vector<uint8_t>& plaintext,
     const std::vector<uint8_t>& key
 ) {
-    if (!g_initialized) {
+    if (!g_initialized.load()) {
         return Result<std::vector<uint8_t>>::err("Crypto not initialized");
     }
     
@@ -166,7 +172,7 @@ Result<std::vector<uint8_t>> decrypt_symmetric(
     const std::vector<uint8_t>& ciphertext,
     const std::vector<uint8_t>& key
 ) {
-    if (!g_initialized) {
+    if (!g_initialized.load()) {
         return Result<std::vector<uint8_t>>::err("Crypto not initialized");
     }
     
@@ -226,7 +232,7 @@ Result<std::vector<uint8_t>> encrypt_asymmetric(
     const std::vector<uint8_t>& recipient_public_key,
     const std::vector<uint8_t>& sender_secret_key
 ) {
-    if (!g_initialized) {
+    if (!g_initialized.load()) {
         return Result<std::vector<uint8_t>>::err("Crypto not initialized");
     }
     
@@ -280,7 +286,7 @@ Result<std::vector<uint8_t>> decrypt_asymmetric(
     const std::vector<uint8_t>& sender_public_key,
     const std::vector<uint8_t>& recipient_secret_key
 ) {
-    if (!g_initialized) {
+    if (!g_initialized.load()) {
         return Result<std::vector<uint8_t>>::err("Crypto not initialized");
     }
     

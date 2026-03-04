@@ -10,16 +10,16 @@
 # ============================================================================
 
 # PyTorch (CPU version - for GPU, see instructions below)
-torch==2.3.1
-torchaudio==2.3.1
+torch==2.6.0
+torchaudio==2.6.0
 
 # Whisper for speech recognition (OpenAI)
 openai-whisper==20231117
 
 # NLLB for translation (Meta, 200+ languages)
-transformers==4.40.2
-sentencepiece==0.2.0
-protobuf==4.25.3
+transformers==4.48.0
+sentencepiece==0.2.1
+protobuf==5.29.6
 
 # Audio and numerical processing
 numpy==1.26.4

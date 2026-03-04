@@ -223,6 +223,7 @@ private:
     // Threading
     std::thread state_thread_;
     std::mutex state_mutex_;
+    bool thread_joined_{true}; // tracks whether state_thread_ has been joined
 };
 
 } // namespace apm

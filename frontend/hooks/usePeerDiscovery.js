@@ -3,7 +3,6 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-const API_BASE = 'http://localhost:8080';
 const POLL_INTERVAL = 3000; // Poll every 3 seconds
 
 export const usePeerDiscovery = () => {
@@ -17,7 +16,7 @@ export const usePeerDiscovery = () => {
   // Fetch peers from the service
   const fetchPeers = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/peers`);
+      const response = await fetch('/api/peers');
       
       if (!response.ok) {
         throw new Error('Failed to fetch peers');
@@ -37,7 +36,7 @@ export const usePeerDiscovery = () => {
   // Update local status
   const updateStatus = useCallback(async (status) => {
     try {
-      const response = await fetch(`${API_BASE}/api/status`, {
+      const response = await fetch('/api/status', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -61,7 +60,7 @@ export const usePeerDiscovery = () => {
   // Get specific peer details
   const getPeerDetails = useCallback(async (peerId) => {
     try {
-      const response = await fetch(`${API_BASE}/api/peers/${peerId}`);
+      const response = await fetch(`/api/peers/${encodeURIComponent(peerId)}`);
       
       if (!response.ok) {
         throw new Error('Peer not found');
@@ -85,7 +84,7 @@ export const usePeerDiscovery = () => {
     // Poll session status
     sessionHeartbeatRef.current = setInterval(async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/session/${sessionId}`);
+        const response = await fetch(`/api/session/${encodeURIComponent(sessionId)}`);
         
         if (response.ok) {
           const data = await response.json();

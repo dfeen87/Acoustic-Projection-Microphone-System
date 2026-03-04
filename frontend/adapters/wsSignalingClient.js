@@ -45,7 +45,13 @@ export class WSSignalingClient {
     };
 
     this.ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch (err) {
+        console.warn("WebSocket: failed to parse message, ignoring.", err);
+        return;
+      }
       if (msg.type === "pong") {
         return;
       }

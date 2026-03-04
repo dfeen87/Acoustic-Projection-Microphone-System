@@ -68,7 +68,12 @@ def main():
     )
     
     args = parser.parse_args()
-    
+
+    # Validate port range
+    if not (1 <= args.port <= 65535):
+        logger.error(f"Invalid port {args.port}: must be between 1 and 65535")
+        sys.exit(1)
+
     # Update logging level
     logging.getLogger().setLevel(getattr(logging, args.log_level))
     

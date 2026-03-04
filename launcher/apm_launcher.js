@@ -7,8 +7,8 @@ const open = require("open");
 
 // Configuration
 const CONFIG = {
-  BACKEND_PORT: process.env.APM_BACKEND_PORT || 8080,
-  UI_PORT: process.env.APM_UI_PORT || 4173,
+  BACKEND_PORT: parseInt(process.env.APM_BACKEND_PORT || "8080", 10),
+  UI_PORT: parseInt(process.env.APM_UI_PORT || "4173", 10),
   HEALTH_CHECK_TIMEOUT: 60000, // 60 seconds max wait
   HEALTH_CHECK_INTERVAL: 300,   // Check every 300ms
   STARTUP_DELAY: 500,           // Initial delay before health checks
@@ -40,10 +40,25 @@ const logger = {
 };
 
 /**
+ * Validates that a port number is in the valid range 1–65535
+ */
+function validatePort(port, name) {
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(
+      `Invalid ${name} port ${port}: must be an integer between 1 and 65535`
+    );
+  }
+}
+
+/**
  * Validates required files and directories exist
  */
 function validateEnvironment() {
   logger.info("Validating environment...");
+
+  // Validate configured ports
+  validatePort(CONFIG.BACKEND_PORT, "backend");
+  validatePort(CONFIG.UI_PORT, "UI");
 
   // Check backend path
   // Since we are running python, we check for the script existence

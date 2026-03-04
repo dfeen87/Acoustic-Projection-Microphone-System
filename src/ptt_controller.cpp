@@ -32,8 +32,18 @@ void PTTController::shutdown() {
     
     running_ = false;
     
-    if (state_thread_.joinable()) {
-        state_thread_.join();
+    // Move the thread out of the member while holding the mutex, then join
+    // outside the lock to avoid deadlocking the cooldown thread.
+    std::thread to_join;
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        if (!thread_joined_ && state_thread_.joinable()) {
+            thread_joined_ = true;
+            to_join = std::move(state_thread_);
+        }
+    }
+    if (to_join.joinable()) {
+        to_join.join();
     }
     
     initialized_ = false;
@@ -131,11 +141,25 @@ void PTTController::release() {
     notify_state_change(State::COOLDOWN);
     std::cout << "[PTT] Released - Cooldown (" << hold_duration << "ms)\n";
 
-    if (state_thread_.joinable()) {
-        state_thread_.join();
+    // Join previous cooldown thread (if any) before launching a new one.
+    // Moved out of the state_mutex_ scope to avoid deadlocking the thread.
+    std::thread to_join;
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        if (!thread_joined_ && state_thread_.joinable()) {
+            thread_joined_ = true;
+            to_join = std::move(state_thread_);
+        }
+    }
+    if (to_join.joinable()) {
+        to_join.join();
     }
 
-    // Schedule return to IDLE after cooldown
+    // Reset the flag under the lock before starting the new thread
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        thread_joined_ = false;
+    }
     state_thread_ = std::thread([this]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(cooldown_ms_));
         if (!running_) {

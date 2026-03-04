@@ -1,7 +1,8 @@
 # ============================
 # Stage 1 — Build native APM engine
 # ============================
-FROM ubuntu:22.04 AS builder
+# Pin the base image to a specific digest for reproducible, tamper-evident builds.
+FROM ubuntu:22.04@sha256:3ba65aa20f86a0fad9df2b2c259c613df006b2e6d0bfcc8a146afb8c525a9751 AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 
 # ---- Toolchain only (NO optional libs) ----
@@ -57,7 +58,8 @@ RUN echo "===== Searching for binaries =====" && \
 # ============================
 # Stage 2 — Runtime (FastAPI + APM)
 # ============================
-FROM ubuntu:22.04 AS runtime
+# Pin the base image to a specific digest for reproducible, tamper-evident builds.
+FROM ubuntu:22.04@sha256:3ba65aa20f86a0fad9df2b2c259c613df006b2e6d0bfcc8a146afb8c525a9751 AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
@@ -79,8 +81,9 @@ WORKDIR /app
 # Copy entire build dir temporarily
 COPY --from=builder /app/build /tmp/build
 
-# Find and copy the binary
-RUN find /tmp/build -type f -executable | head -1 | xargs -I {} cp {} /app/apm_backend \
+# Copy and install the binary at an explicit, deterministic path.
+RUN cp /tmp/build/apm_backend /app/apm_backend \
+    || { echo "ERROR: apm_backend binary not found at /tmp/build/apm_backend"; exit 1; } \
     && chmod +x /app/apm_backend \
     && rm -rf /tmp/build
 

@@ -7,7 +7,8 @@ export async function fetchPeers() {
 }
 
 export async function createSession(peerId) {
-  const res = await fetch(`/api/session?peer_id=${peerId}`, {
+  const params = new URLSearchParams({ peer_id: peerId });
+  const res = await fetch(`/api/session?${params}`, {
     method: "POST",
   });
   if (!res.ok) throw new Error("Failed to create session");
@@ -15,5 +16,5 @@ export async function createSession(peerId) {
 }
 
 export async function endSession(sessionId) {
-  return fetch(`/api/session/${sessionId}/end`, { method: "POST" });
+  return fetch(`/api/session/${encodeURIComponent(sessionId)}/end`, { method: "POST" });
 }

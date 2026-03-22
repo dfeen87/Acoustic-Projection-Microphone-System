@@ -340,7 +340,7 @@ detected_lang = result["language"]
 
 ## License
 
-MIT License - see LICENSE file
+Non-Commercial License - see LICENSE file
 
 ## Credits
 

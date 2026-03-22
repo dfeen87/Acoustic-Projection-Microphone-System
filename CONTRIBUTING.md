@@ -108,7 +108,7 @@ ctest
 
 ## License
 
-By contributing, you agree your contributions will be licensed under the MIT License.
+By contributing, you agree your contributions will be licensed under the same Non-Commercial License as this project.
 
 ---
 

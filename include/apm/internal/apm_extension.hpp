@@ -8,7 +8,7 @@
  * Extensions must not modify core timing,
  * signal integrity, or safety guarantees.
  *
- * License: MIT
+ * License: Non-Commercial
  */
 #include <string>
 #include <stdexcept>

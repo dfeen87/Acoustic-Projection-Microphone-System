@@ -54,7 +54,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and coding stand
 
 ## 📄 License
 
-MIT License - See [LICENSE](LICENSE) file for details.
+Non-Commercial License - See [LICENSE](LICENSE) file for details.
 
 ---
 

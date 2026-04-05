@@ -403,7 +403,7 @@ APM Headphone Translator is free and open source.
 
 Non-Commercial License - Free to use, modify, and distribute for non-commercial purposes
 
-Copyright © 2025 Don Michael Feeney Jr.
+Copyright © 2026 Don Michael Feeney Jr.
 
 See LICENSE file for full terms.
 
@@ -422,9 +422,13 @@ See LICENSE file for full terms.
 
 ---
 
-**Version**: 1.0.0  
-**Release Date**: December 2025  
-**Last Updated**: December 11, 2025
+**Version**: 6.1.1  
+**Release Date**: April 2026  
+**Last Updated**: April 5, 2026
+
+### 6.1.1
+- Documentation polish and onboarding improvements
+- Version alignment across all components
 
 ### 1.0.0
 - Initial release

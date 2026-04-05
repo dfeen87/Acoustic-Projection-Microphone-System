@@ -316,7 +316,7 @@ The REST API follows the architecture guidelines in `/docs/extension_points.md`:
 
 ## License
 
-Non-Commercial License - Copyright (c) 2025 Don Michael Feeney Jr.
+Non-Commercial License - Copyright (c) 2026 Don Michael Feeney Jr.
 
 ## See Also
 

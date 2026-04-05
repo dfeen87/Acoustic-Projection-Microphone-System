@@ -6,8 +6,8 @@ Thanks for your interest in contributing! This guide will help you get started.
 
 1. **Fork and clone**
    ```bash
-   git clone https://github.com/your-username/apm-system.git
-   cd apm-system
+   git clone https://github.com/dfeen87/Acoustic-Projection-Microphone-System.git
+   cd Acoustic-Projection-Microphone-System
    ```
 
 2. **Build and test**
@@ -26,7 +26,7 @@ Thanks for your interest in contributing! This guide will help you get started.
 ## Code Standards
 
 ### Style Guide
-- **C++ Standard:** C++17
+- **C++ Standard:** C++20
 - **Formatting:** Follow existing code style (2 spaces, no tabs)
 - **Naming:**
   - Classes: `PascalCase`
@@ -89,7 +89,7 @@ ctest
 
 ### Benchmarks
 ```bash
-./apm_benchmarks --benchmark_filter=BM_DelayAndSum
+./apm_bench --benchmark_filter=BM_DelayAndSum
 ```
 
 ## Code Review
@@ -108,7 +108,7 @@ ctest
 
 ## License
 
-By contributing, you agree your contributions will be licensed under the same Non-Commercial License as this project.
+By contributing, you agree your contributions will be licensed under the same non-commercial license as this project. Commercial use of contributions requires a separate commercial license — contact dfeen87@gmail.com.
 
 ---
 

@@ -42,14 +42,12 @@ APM System includes **fully local speech recognition and translation** using sta
 # Or step-by-step: activate venv and run translation bridge
 source venv/bin/activate
 python3 scripts/translation_bridge.py audio.wav --source en --target es
-Platform Notes
-Supported on Linux and macOS (Intel & Apple Silicon)
-
-Text translation fallback uses portable <cctype> classification
-(no locale-dependent behavior) for cross-platform correctness
-
-CI and Docker validate Linux builds; macOS builds are verified locally
 ```
+
+**Platform Notes**
+- Supported on Linux and macOS (Intel & Apple Silicon)
+- Text translation fallback uses portable `<cctype>` classification (no locale-dependent behavior) for cross-platform correctness
+- CI and Docker validate Linux builds; macOS builds are verified locally
 
 ### Supported Languages
 
@@ -291,7 +289,7 @@ Checks:
 
 ```bash
 # Run full integration test suite
-node tests/integration.test.js
+node tests/integration/integration.test.js
 ```
 
 Tests include:
@@ -580,7 +578,7 @@ void reset();  // Reset hangover counter
 ```
 
 #### `FFTProcessor`
-High-performance FFT using FFTW.
+High-performance FFT using FFTW (only available when built with FFTW3; throws at runtime otherwise).
 
 ```cpp
 FFTProcessor(int size);
@@ -592,6 +590,7 @@ void inverse(const std::vector<std::complex<float>>& input,
             std::vector<float>& output);
 
 static void apply_window(std::vector<float>& data, WindowType type);
+// WindowType: Hann, Hamming, Blackman, Kaiser
 ```
 
 #### `APMSystem`
@@ -619,22 +618,6 @@ std::vector<AudioFrame> process(
 
 std::future<std::vector<AudioFrame>> process_async(...);
 void reset_all();  // Reset echo canceller, noise suppressor, and VAD state
-```
-
-#### `FFTProcessor`
-High-performance FFT using FFTW (only available when built with FFTW3; throws at runtime otherwise).
-
-```cpp
-FFTProcessor(int size);
-
-void forward(const std::vector<float>& input,
-            std::vector<std::complex<float>>& output);
-
-void inverse(const std::vector<std::complex<float>>& input,
-            std::vector<float>& output);
-
-static void apply_window(std::vector<float>& data, WindowType type);
-// WindowType: Hann, Hamming, Blackman, Kaiser
 ```
 
 ---
@@ -773,7 +756,7 @@ Now that the full APM pipeline builds cleanly and launches reliably, the next ph
 
 ### 🚀 Next Milestones
 
-See [ROADMAP.md](ROADMAP.md) for detailed roadmap including:
+See [docs/ROADMAP.md](docs/ROADMAP.md) for detailed roadmap including:
 
 1. **Ring buffers & low-latency audio pipeline** - Continuous real-time capture with PortAudio
 2. **TTS integration** - Complete ASR → NMT → TTS speech-to-speech chain
@@ -782,10 +765,10 @@ See [ROADMAP.md](ROADMAP.md) for detailed roadmap including:
 
 ---
 
-## ## License
+## License
 
 This project is available for **non‑commercial use only** under the terms of the included LICENSE file.  
-Commercial use requires a separate paid license.
+Commercial use requires a separate paid license — contact dfeen87@gmail.com.
 
 ---
 
@@ -815,12 +798,12 @@ I would like to acknowledge **Microsoft Copilot**, **Anthropic Claude**, **Googl
 If you use this work in research, please cite:
 
 ```bibtex
-@software{feeney2025apm,
+@software{feeney2026apm,
   author = {Feeney, Don Michael Jr.},
   title = {Acoustic Projection Microphone System},
-  year = {2025},
+  year = {2026},
   publisher = {GitHub},
-  url = {https://github.com/dfeen87/acoustic-projection-microphone-system}
+  url = {https://github.com/dfeen87/Acoustic-Projection-Microphone-System}
 }
 ```
 
@@ -835,4 +818,4 @@ If you use this work in research, please cite:
 
 ---
 
-**Status**: Production Ready | **Version**: 2.0.0 | **Last Updated**: February 21 2026
+**Status**: Production Ready | **Version**: 6.1.1 | **Last Updated**: April 2026

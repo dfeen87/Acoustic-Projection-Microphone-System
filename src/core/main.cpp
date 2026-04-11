@@ -10,6 +10,7 @@
 #include <condition_variable>
 #include <cmath>
 #include <algorithm>
+#include <iomanip>
 
 using namespace apm;
 
@@ -70,9 +71,28 @@ int main() {
     apm_config.num_speakers = 2; // Stereo output
     apm_config.sample_rate = 48000;
     
+    // Run diagnostics
+    auto health = DiagnosticsEngine::run_startup_checks(apm_config.sample_rate, apm_config.num_microphones);
+    if (!health.ok) {
+        std::cerr << "Diagnostics failed: " << health.message << std::endl;
+        // In a real app we might exit or prompt, but here we'll just log
+    } else {
+        std::cout << "Diagnostics passed. " << health.message << std::endl;
+    }
+
     // Initialize APM
     APMSystem apm(apm_config);
     
+    // Load default profile
+    auto profile = apm.get_profile_manager().load_profile("config/default_profile.cfg");
+    if (profile) {
+        apm.get_profile_manager().add_profile(*profile);
+        apm.get_profile_manager().set_active_profile(profile->name);
+        std::cout << "Loaded profile: " << profile->name << std::endl;
+    } else {
+        std::cout << "Using default generated profile." << std::endl;
+    }
+
     // Queues
     ThreadSafeQueue<std::vector<float>> input_queue;
     ThreadSafeQueue<std::vector<float>> output_queue;
@@ -181,11 +201,19 @@ int main() {
     }
     
     // Main loop
+    int print_counter = 0;
     while (g_running) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        print_counter++;
+        if (print_counter >= 20) { // Every 2 seconds
+            auto metrics = apm.get_monitoring_metrics();
+            std::cout << "\r[Monitoring] Peak: " << std::fixed << std::setprecision(1) << metrics.peak_db
+                      << "dB, SNR: " << metrics.snr_db << "dB, Latency: " << metrics.latency_ms << "ms     "
+                      << std::flush;
+            print_counter = 0;
+        }
     }
-    
-    std::cout << "Stopping..." << std::endl;
+    std::cout << "\nStopping..." << std::endl;
     audio.stop();
     if (processing_thread.joinable()) {
         processing_thread.join();

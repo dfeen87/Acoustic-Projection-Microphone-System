@@ -208,6 +208,140 @@ public:
 };
 
 // ============================================================================
+// Profiles & Calibration
+// ============================================================================
+
+struct CalibrationProfile {
+    float rms_noise_floor_db{-96.0f};
+    float peak_noise_floor_db{-96.0f};
+    float recommended_input_gain{1.0f};
+    float estimated_latency_ms{0.0f};
+    bool valid{false};
+};
+
+struct Profile {
+    std::string name{"Default"};
+    CalibrationProfile calibration;
+    float max_feedback_attenuation_db{12.0f};
+    int max_feedback_notches{3};
+    bool feedback_suppression_enabled{true};
+    float user_eq_low_gain{1.0f};
+    float user_eq_mid_gain{1.0f};
+    float user_eq_high_gain{1.0f};
+};
+
+class ProfileManager {
+    std::vector<Profile> profiles_;
+    std::string current_profile_name_;
+
+public:
+    ProfileManager();
+
+    bool save_profile(const Profile& profile, const std::string& filepath);
+    std::optional<Profile> load_profile(const std::string& filepath);
+
+    void add_profile(const Profile& profile);
+    std::vector<std::string> get_profile_names() const;
+    std::optional<Profile> get_profile(const std::string& name) const;
+    void set_active_profile(const std::string& name);
+    std::string get_active_profile_name() const;
+};
+
+class AutoCalibrationEngine {
+public:
+    enum class Step {
+        Idle,
+        MeasureNoiseFloor,
+        MeasureGain,
+        MeasureLatency,
+        Complete
+    };
+
+private:
+    Step current_step_{Step::Idle};
+    CalibrationProfile current_profile_;
+    int frames_processed_{0};
+    int target_frames_{0};
+
+    // Accumulators for measurements
+    float acc_energy_{0.0f};
+    float max_peak_{-96.0f};
+
+public:
+    AutoCalibrationEngine() = default;
+
+    void start_calibration();
+    void cancel_calibration();
+    void advance_step();
+    Step get_current_step() const { return current_step_; }
+
+    // Call this repeatedly with audio frames during the calibration process
+    void process_frame(const AudioFrame& frame);
+
+    CalibrationProfile get_result() const { return current_profile_; }
+    float get_progress() const;
+};
+
+// ============================================================================
+// Feedback Suppression
+// ============================================================================
+
+class FeedbackSuppressionEngine {
+    struct BiquadFilter {
+        float b0, b1, b2, a1, a2;
+        float x1, x2, y1, y2;
+        float freq_hz;
+
+        void set_notch(float freq, float sample_rate, float q = 10.0f);
+        float process(float in);
+    };
+
+    std::vector<BiquadFilter> notches_;
+    int sample_rate_{48000};
+    int max_notches_{3};
+    float max_attenuation_db_{12.0f};
+
+    // Simple ZCR based feedback detection
+    int frames_since_update_{0};
+    std::deque<float> zcr_history_;
+
+    float detect_feedback_freq(const AudioFrame& frame) const;
+
+public:
+    FeedbackSuppressionEngine(int max_notches = 3, float max_attenuation = 12.0f);
+
+    void configure(int sample_rate, int max_notches, float max_attenuation);
+
+    AudioFrame process(const AudioFrame& frame);
+    void reset();
+};
+
+// ============================================================================
+// Diagnostics & Monitoring
+// ============================================================================
+
+struct MonitoringMetrics {
+    float peak_db{-96.0f};
+    float rms_db{-96.0f};
+    float snr_db{0.0f};
+    bool clipping{false};
+    float latency_ms{0.0f};
+};
+
+struct HealthStatus {
+    bool ok{true};
+    std::string message{"OK"};
+    bool input_device_ok{true};
+    bool sample_rate_ok{true};
+    bool channel_mapping_ok{true};
+};
+
+class DiagnosticsEngine {
+public:
+    static HealthStatus run_startup_checks(int expected_sample_rate, int expected_channels);
+};
+
+// ============================================================================
 // APM System (Full Pipeline)
 // ============================================================================
 
@@ -232,6 +366,14 @@ private:
     DirectionalProjector projector_;
     std::unique_ptr<TranslationEngine> translator_;
 
+    // New Features
+    FeedbackSuppressionEngine feedback_suppressor_;
+    ProfileManager profile_manager_;
+    AutoCalibrationEngine calibration_engine_;
+
+    MonitoringMetrics current_metrics_;
+    mutable std::mutex metrics_mutex_;
+
 public:
     // ✅ Remove invalid default argument
     explicit APMSystem(const Config& cfg);
@@ -250,6 +392,11 @@ public:
         float target_direction_rad);
 
     void reset_all();
+
+    // New API
+    MonitoringMetrics get_monitoring_metrics() const;
+    ProfileManager& get_profile_manager() { return profile_manager_; }
+    AutoCalibrationEngine& get_calibration_engine() { return calibration_engine_; }
 };
 
 } // namespace apm

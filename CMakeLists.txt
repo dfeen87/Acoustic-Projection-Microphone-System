@@ -251,6 +251,11 @@ if(APM_ENABLE_TESTS)
     target_link_libraries(apm_test PRIVATE apm_core GTest::gtest_main)
     add_test(NAME apm_core_test COMMAND apm_test)
 
+    # New V7.0.0 Feature tests
+    add_executable(apm_features_test tests/test_apm_features.cpp)
+    target_link_libraries(apm_features_test PRIVATE apm_core GTest::gtest_main)
+    add_test(NAME apm_features_test COMMAND apm_features_test)
+
     # Crypto tests
     if(HAVE_ENCRYPTION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_crypto.cpp)
         add_executable(crypto_test tests/test_crypto.cpp)

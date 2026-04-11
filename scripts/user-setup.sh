@@ -43,7 +43,7 @@ cat << "EOF"
 ╚═══════════════════════════════════════════════════════════╝
 EOF
 echo ""
-echo -e "${BLUE}Version 1.0.0 | Copyright © 2025 Don Michael Feeney Jr.${NC}"
+echo -e "${BLUE}Version 7.0.0 | Copyright © 2025 Don Michael Feeney Jr.${NC}"
 echo ""
 
 # Check if running as root
@@ -327,7 +327,7 @@ echo -e "${BOLD}Creating default configuration...${NC}"
 
 cat > "$INSTALL_DIR/config/settings.json" << 'CONFIG_EOF'
 {
-    "version": "1.0.0",
+    "version": "7.0.0",
     "audio": {
         "sample_rate": 48000,
         "buffer_size": 960,
@@ -423,7 +423,7 @@ echo ""
 cat > "$INSTALL_DIR/install-info.txt" << INFO_EOF
 APM Headphone Translator
 Installation Date: $(date)
-Version: 1.0.0
+Version: 7.0.0
 Install Directory: $INSTALL_DIR
 OS: $OS ($ARCH)
 Offline Packs: $DOWNLOAD_PACKS

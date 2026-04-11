@@ -3,7 +3,7 @@
 ; https://jrsoftware.org/isinfo.php
 
 #define MyAppName "APM Headphone Translator"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "7.0.0"
 #define MyAppPublisher "Don Michael Feeney Jr."
 #define MyAppURL "https://apm-system.com"
 #define MyAppExeName "apm-headphone.exe"

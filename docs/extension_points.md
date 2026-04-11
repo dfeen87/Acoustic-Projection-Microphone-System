@@ -150,4 +150,4 @@ For extensions and integration changes, maintainers will look for:
 
 ## Status
 
-This document reflects the current stable direction of the project as of **v2.3.0** and is expected to evolve conservatively.
+This document reflects the current stable direction of the project as of **v7.0.0** and is expected to evolve conservatively.

@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
     await app.state.housekeeper_task
 
 
-app = FastAPI(title="APM FastAPI Backend", version="4.1.0", lifespan=lifespan)
+app = FastAPI(title="APM FastAPI Backend", version="7.0.0", lifespan=lifespan)
 
 # If you use Vite proxy, CORS is less critical, but keep it anyway.
 app.add_middleware(

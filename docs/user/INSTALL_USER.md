@@ -416,7 +416,7 @@ Settings → Updates → ☑ Automatically download updates
 Help → Check for Updates
 ```
 
-**Current Version**: 1.0.0  
+**Current Version**: 7.0.0  
 
 ---
 
@@ -458,5 +458,5 @@ Help → Check for Updates
 
 ---
 
-*Version 1.0.0 | Last Updated: December 2025*  
+*Version 7.0.0 | Last Updated: December 2025*  
 *Copyright © 2025 Don Michael Feeney Jr. | Non-Commercial License*

@@ -359,7 +359,7 @@ Local Participant:
   IP: {local_ip}
   Port: 5060
 
-APM Version: 2.0.0
+APM Version: 7.0.0
 Build: Release
 Python: {Path('/usr/bin/python3').exists() and 'Available' or 'Not Found'}
 

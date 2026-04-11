@@ -344,49 +344,26 @@ Tests include:
 ## 📁 Project Structure Overview
 
 ```
-apm/
-├── launcher/
-│   ├── apm_launcher.js          # Production launcher
-│   ├── package.json             # Launcher dependencies
-│   └── README.md                # Launcher documentation
-├── scripts/
-│   ├── healthcheck.js           # System validator
-│   ├── setup.sh                 # Interactive/automated setup
-│   ├── start-apm.sh             # Unix/Mac launcher wrapper
-│   ├── start-apm.bat            # Windows launcher wrapper
-│   ├── start-api.sh             # REST API only (Unix/Mac)
-│   ├── start-api.bat            # REST API only (Windows)
-│   ├── translation_bridge.py    # Python Whisper+NLLB bridge
-│   └── user-setup.sh            # End-user setup helper
-├── src/
-│   ├── apm_core.cpp             # APMCore lightweight DSP + text fallback
-│   ├── ptt_controller.cpp       # Push-to-Talk controller
-│   ├── call_signaling.cpp       # UDP call signaling
-│   ├── crypto.cpp               # ChaCha20-Poly1305 / X25519 encryption
-│   ├── local_translation_engine.cpp  # Whisper+NLLB local translation
-│   ├── core/
-│   │   ├── main.cpp             # Backend entry point
-│   │   └── apm_system.cpp       # Full real-time pipeline
-│   ├── io/
-│   │   ├── audio_device.cpp     # PortAudio live I/O
-│   │   └── wav_io.cpp           # WAV file read/write
-│   └── translation/
-│       └── local_translation_adapter.cpp
+Acoustic-Projection-Microphone-System/
+├── backend/                     # Python FastAPI backend and signaling/control modules
+├── cmake/                       # CMake package/config helpers
+├── config/                      # Optional/runtime dependency configuration
+├── docker/                      # Container build assets
+├── docs/                        # Architecture, build, deployment, security, and user docs
+├── examples/                    # C++ and Python usage examples
+├── frontend/                    # Frontend adapters/hooks/components
 ├── include/apm/                 # Public C++ API headers
-├── tests/
-│   ├── test_apm_core.cpp        # Core unit tests (GTest)
-│   ├── test_crypto.cpp          # Encryption unit tests
-│   └── integration/
-│       └── integration.test.js  # Node.js integration tests
-├── backend/                     # Python FastAPI REST server
-├── ui/
-│   └── apm-dashboard.html       # Web dashboard UI
-├── docs/                        # Extended documentation
-├── examples/                    # Example programs
-├── build/                       # CMake build directory
-│   └── apm_backend              # Compiled backend (or .exe)
-├── CMakeLists.txt               # Build configuration
-└── .gitignore                   # Git exclusions
+├── installers/                  # Installer assets (e.g., Inno Setup)
+├── launcher/                    # Node.js launcher/orchestration entrypoint
+├── scripts/                     # Setup, startup, and utility scripts
+├── src/                         # Core C++ implementation (DSP, signaling, translation, tools)
+├── tests/                       # C++ and Node integration tests
+├── tools/                       # Utility tools and scripts
+├── ui/                          # React + Vite web UI
+├── CMakeLists.txt               # Root CMake build configuration
+├── README.md                    # Project overview and usage
+├── TESTING_AND_VALIDATION.md    # Validation matrix and test guidance
+└── SYSTEM_MANIFEST.md           # Repository/system manifest
 ```
 
 ---

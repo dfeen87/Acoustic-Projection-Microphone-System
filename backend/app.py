@@ -101,6 +101,42 @@ class Session(BaseModel):
     created_at: float
     updated_at: float
 
+class ProfileCreate(BaseModel):
+    name: str
+
+class CalibrationStart(BaseModel):
+    action: Literal["start", "cancel", "advance"]
+
+# -----------------------------
+# Mock State for New Features
+# -----------------------------
+mock_diagnostics = {
+    "ok": True,
+    "message": "OK",
+    "input_device_ok": True,
+    "sample_rate_ok": True,
+    "channel_mapping_ok": True
+}
+
+mock_metrics = {
+    "peak_db": -12.5,
+    "rms_db": -24.0,
+    "snr_db": 15.2,
+    "clipping": False,
+    "latency_ms": 4.2
+}
+
+mock_profiles = [
+    {"name": "Default", "feedback_suppression_enabled": True},
+    {"name": "Lecture Hall", "feedback_suppression_enabled": True},
+    {"name": "Studio", "feedback_suppression_enabled": False}
+]
+
+mock_calibration_state = {
+    "step": "Idle",
+    "progress": 0.0,
+    "result": None
+}
 
 # -----------------------------
 # Endpoints your system expects
@@ -108,6 +144,62 @@ class Session(BaseModel):
 @app.get("/health")
 def health():
     return {"ok": True}
+
+# -----------------------------
+# New V7.0.0 Endpoints
+# -----------------------------
+@app.get("/api/health/diagnostics")
+def get_diagnostics():
+    return mock_diagnostics
+
+@app.get("/api/metrics")
+def get_metrics():
+    import random
+    # Jitter the metrics slightly for visual effect in UI
+    mock_metrics["peak_db"] = -12.0 + random.uniform(-2, 2)
+    mock_metrics["rms_db"] = -24.0 + random.uniform(-1, 1)
+    mock_metrics["snr_db"] = 15.0 + random.uniform(-0.5, 0.5)
+    return mock_metrics
+
+@app.get("/api/profiles")
+def list_profiles():
+    return {"profiles": mock_profiles, "active": "Default"}
+
+@app.post("/api/profiles")
+def create_profile(profile: ProfileCreate):
+    mock_profiles.append({"name": profile.name, "feedback_suppression_enabled": True})
+    return {"ok": True, "profile": profile.name}
+
+@app.get("/api/calibration")
+def get_calibration_status():
+    return mock_calibration_state
+
+@app.post("/api/calibration")
+def control_calibration(action: CalibrationStart):
+    if action.action == "start":
+        mock_calibration_state["step"] = "MeasureNoiseFloor"
+        mock_calibration_state["progress"] = 0.0
+    elif action.action == "cancel":
+        mock_calibration_state["step"] = "Idle"
+        mock_calibration_state["progress"] = 0.0
+    elif action.action == "advance":
+        if mock_calibration_state["step"] == "MeasureNoiseFloor":
+            mock_calibration_state["step"] = "MeasureGain"
+            mock_calibration_state["progress"] = 0.33
+        elif mock_calibration_state["step"] == "MeasureGain":
+            mock_calibration_state["step"] = "MeasureLatency"
+            mock_calibration_state["progress"] = 0.66
+        elif mock_calibration_state["step"] == "MeasureLatency":
+            mock_calibration_state["step"] = "Complete"
+            mock_calibration_state["progress"] = 1.0
+            mock_calibration_state["result"] = {
+                "rms_noise_floor_db": -65.0,
+                "peak_noise_floor_db": -50.0,
+                "recommended_input_gain": 0.8,
+                "estimated_latency_ms": 45.0,
+                "valid": True
+            }
+    return mock_calibration_state
 
 @app.get("/api/peers")
 def list_peers():

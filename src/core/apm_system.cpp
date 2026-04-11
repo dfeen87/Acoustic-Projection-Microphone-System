@@ -11,6 +11,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 
 namespace apm {
 
@@ -533,6 +534,322 @@ DirectionalProjector::create_projection_signals(
 }
 
 // ============================================================================
+// ProfileManager Implementation
+// ============================================================================
+
+ProfileManager::ProfileManager() {
+    // Add default profile
+    Profile default_profile;
+    default_profile.name = "Default";
+    profiles_.push_back(default_profile);
+    current_profile_name_ = "Default";
+}
+
+bool ProfileManager::save_profile(const Profile& profile, const std::string& filepath) {
+    // Simple Key-Value serialization
+    std::ofstream out(filepath);
+    if (!out.is_open()) return false;
+
+    out << "name=" << profile.name << "\n";
+    out << "rms_noise_floor_db=" << profile.calibration.rms_noise_floor_db << "\n";
+    out << "peak_noise_floor_db=" << profile.calibration.peak_noise_floor_db << "\n";
+    out << "recommended_input_gain=" << profile.calibration.recommended_input_gain << "\n";
+    out << "estimated_latency_ms=" << profile.calibration.estimated_latency_ms << "\n";
+    out << "calibration_valid=" << (profile.calibration.valid ? "1" : "0") << "\n";
+    out << "max_feedback_attenuation_db=" << profile.max_feedback_attenuation_db << "\n";
+    out << "max_feedback_notches=" << profile.max_feedback_notches << "\n";
+    out << "feedback_suppression_enabled=" << (profile.feedback_suppression_enabled ? "1" : "0") << "\n";
+    out << "user_eq_low_gain=" << profile.user_eq_low_gain << "\n";
+    out << "user_eq_mid_gain=" << profile.user_eq_mid_gain << "\n";
+    out << "user_eq_high_gain=" << profile.user_eq_high_gain << "\n";
+
+    return true;
+}
+
+std::optional<Profile> ProfileManager::load_profile(const std::string& filepath) {
+    std::ifstream in(filepath);
+    if (!in.is_open()) return std::nullopt;
+
+    Profile profile;
+    std::string line;
+    while (std::getline(in, line)) {
+        auto pos = line.find('=');
+        if (pos == std::string::npos) continue;
+
+        std::string key = line.substr(0, pos);
+        std::string value = line.substr(pos + 1);
+
+        try {
+            if (key == "name") profile.name = value;
+            else if (key == "rms_noise_floor_db") profile.calibration.rms_noise_floor_db = std::stof(value);
+            else if (key == "peak_noise_floor_db") profile.calibration.peak_noise_floor_db = std::stof(value);
+            else if (key == "recommended_input_gain") profile.calibration.recommended_input_gain = std::stof(value);
+            else if (key == "estimated_latency_ms") profile.calibration.estimated_latency_ms = std::stof(value);
+            else if (key == "calibration_valid") profile.calibration.valid = (value == "1");
+            else if (key == "max_feedback_attenuation_db") profile.max_feedback_attenuation_db = std::stof(value);
+            else if (key == "max_feedback_notches") profile.max_feedback_notches = std::stoi(value);
+            else if (key == "feedback_suppression_enabled") profile.feedback_suppression_enabled = (value == "1");
+            else if (key == "user_eq_low_gain") profile.user_eq_low_gain = std::stof(value);
+            else if (key == "user_eq_mid_gain") profile.user_eq_mid_gain = std::stof(value);
+            else if (key == "user_eq_high_gain") profile.user_eq_high_gain = std::stof(value);
+        } catch (...) {
+            // Ignore parse errors on individual lines
+        }
+    }
+    return profile;
+}
+
+void ProfileManager::add_profile(const Profile& profile) {
+    auto it = std::find_if(profiles_.begin(), profiles_.end(),
+                           [&](const Profile& p) { return p.name == profile.name; });
+    if (it != profiles_.end()) {
+        *it = profile;
+    } else {
+        profiles_.push_back(profile);
+    }
+}
+
+std::vector<std::string> ProfileManager::get_profile_names() const {
+    std::vector<std::string> names;
+    for (const auto& p : profiles_) names.push_back(p.name);
+    return names;
+}
+
+std::optional<Profile> ProfileManager::get_profile(const std::string& name) const {
+    auto it = std::find_if(profiles_.begin(), profiles_.end(),
+                           [&](const Profile& p) { return p.name == name; });
+    if (it != profiles_.end()) return *it;
+    return std::nullopt;
+}
+
+void ProfileManager::set_active_profile(const std::string& name) {
+    if (get_profile(name)) {
+        current_profile_name_ = name;
+    }
+}
+
+std::string ProfileManager::get_active_profile_name() const {
+    return current_profile_name_;
+}
+
+// ============================================================================
+// AutoCalibrationEngine Implementation
+// ============================================================================
+
+void AutoCalibrationEngine::start_calibration() {
+    current_step_ = Step::MeasureNoiseFloor;
+    current_profile_ = CalibrationProfile{};
+    frames_processed_ = 0;
+    target_frames_ = 100; // ~2 seconds at 50fps
+    acc_energy_ = 0.0f;
+    max_peak_ = -96.0f;
+}
+
+void AutoCalibrationEngine::cancel_calibration() {
+    current_step_ = Step::Idle;
+}
+
+void AutoCalibrationEngine::advance_step() {
+    switch (current_step_) {
+        case Step::MeasureNoiseFloor:
+            current_profile_.rms_noise_floor_db = 10.0f * std::log10(std::max(acc_energy_ / frames_processed_, 1e-10f));
+            current_profile_.peak_noise_floor_db = max_peak_;
+            current_step_ = Step::MeasureGain;
+            break;
+        case Step::MeasureGain:
+            // Calculate headroom from peak, aim for -12dBFS
+            current_profile_.recommended_input_gain = std::pow(10.0f, (-12.0f - max_peak_) / 20.0f);
+            current_step_ = Step::MeasureLatency;
+            break;
+        case Step::MeasureLatency:
+            // Mock latency estimation
+            current_profile_.estimated_latency_ms = 45.0f;
+            current_profile_.valid = true;
+            current_step_ = Step::Complete;
+            break;
+        default:
+            break;
+    }
+
+    // Reset accumulators for next step
+    frames_processed_ = 0;
+    acc_energy_ = 0.0f;
+    max_peak_ = -96.0f;
+}
+
+void AutoCalibrationEngine::process_frame(const AudioFrame& frame) {
+    if (current_step_ == Step::Idle || current_step_ == Step::Complete) return;
+
+    float energy = 0.0f;
+    float peak = 0.0f;
+
+    auto samples = frame.samples();
+    if (samples.empty()) return;
+
+    for (float s : samples) {
+        energy += s * s;
+        peak = std::max(peak, std::abs(s));
+    }
+    energy /= samples.size();
+
+    acc_energy_ += energy;
+
+    float peak_db = 20.0f * std::log10(std::max(peak, 1e-10f));
+    max_peak_ = std::max(max_peak_, peak_db);
+
+    frames_processed_++;
+
+    if (frames_processed_ >= target_frames_) {
+        advance_step();
+    }
+}
+
+float AutoCalibrationEngine::get_progress() const {
+    if (current_step_ == Step::Idle) return 0.0f;
+    if (current_step_ == Step::Complete) return 1.0f;
+
+    float step_base = 0.0f;
+    switch (current_step_) {
+        case Step::MeasureNoiseFloor: step_base = 0.0f; break;
+        case Step::MeasureGain: step_base = 0.33f; break;
+        case Step::MeasureLatency: step_base = 0.66f; break;
+        default: break;
+    }
+
+    float step_progress = static_cast<float>(frames_processed_) / target_frames_;
+    return step_base + (step_progress * 0.33f);
+}
+
+// ============================================================================
+// FeedbackSuppressionEngine Implementation
+// ============================================================================
+
+void FeedbackSuppressionEngine::BiquadFilter::set_notch(float freq, float sr, float q) {
+    freq_hz = freq;
+    float w0 = 2.0f * M_PI * freq / sr;
+    float alpha = std::sin(w0) / (2.0f * q);
+
+    float a0 = 1.0f + alpha;
+    b0 = 1.0f / a0;
+    b1 = (-2.0f * std::cos(w0)) / a0;
+    b2 = 1.0f / a0;
+    a1 = (-2.0f * std::cos(w0)) / a0;
+    a2 = (1.0f - alpha) / a0;
+
+    x1 = x2 = y1 = y2 = 0.0f;
+}
+
+float FeedbackSuppressionEngine::BiquadFilter::process(float in) {
+    float out = b0 * in + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+    x2 = x1;
+    x1 = in;
+    y2 = y1;
+    y1 = out;
+    return out;
+}
+
+FeedbackSuppressionEngine::FeedbackSuppressionEngine(int max_notches, float max_attenuation)
+    : max_notches_(max_notches), max_attenuation_db_(max_attenuation) {
+}
+
+void FeedbackSuppressionEngine::configure(int sample_rate, int max_notches, float max_attenuation) {
+    sample_rate_ = sample_rate;
+    max_notches_ = max_notches;
+    max_attenuation_db_ = max_attenuation;
+}
+
+float FeedbackSuppressionEngine::detect_feedback_freq(const AudioFrame& frame) const {
+    auto samples = frame.samples();
+    if (samples.empty()) return 0.0f;
+
+    // Simple ZCR heuristic for narrowband feedback detection
+    int zero_crossings = 0;
+    for (size_t i = 1; i < samples.size(); ++i) {
+        if ((samples[i] >= 0.0f && samples[i - 1] < 0.0f) ||
+            (samples[i] < 0.0f && samples[i - 1] >= 0.0f)) {
+            zero_crossings++;
+        }
+    }
+
+    float duration_sec = static_cast<float>(samples.size()) / sample_rate_;
+    float freq = (zero_crossings / 2.0f) / duration_sec;
+
+    // Only return confident high frequencies (typical feedback)
+    if (freq > 1000.0f && freq < 10000.0f) {
+        // Very basic purity check: peak must be high
+        float peak = 0.0f;
+        for (float s : samples) peak = std::max(peak, std::abs(s));
+        if (peak > 0.8f) return freq;
+    }
+
+    return 0.0f;
+}
+
+AudioFrame FeedbackSuppressionEngine::process(const AudioFrame& frame) {
+    AudioFrame output = frame;
+    auto samples = output.samples();
+
+    // 1. Detect feedback
+    frames_since_update_++;
+    if (frames_since_update_ > 10) { // Check every ~10 frames
+        float freq = detect_feedback_freq(frame);
+        if (freq > 0.0f) {
+            // Add or update notch
+            if (notches_.size() < static_cast<size_t>(max_notches_)) {
+                BiquadFilter notch;
+                notch.set_notch(freq, sample_rate_);
+                notches_.push_back(notch);
+            } else {
+                // Replace oldest
+                notches_.front().set_notch(freq, sample_rate_);
+                std::rotate(notches_.begin(), notches_.begin() + 1, notches_.end());
+            }
+        }
+        frames_since_update_ = 0;
+    }
+
+    // 2. Apply notches
+    for (float& s : samples) {
+        for (auto& notch : notches_) {
+            s = notch.process(s);
+        }
+    }
+
+    output.compute_metadata();
+    return output;
+}
+
+void FeedbackSuppressionEngine::reset() {
+    notches_.clear();
+    frames_since_update_ = 0;
+    zcr_history_.clear();
+}
+
+// ============================================================================
+// DiagnosticsEngine Implementation
+// ============================================================================
+
+HealthStatus DiagnosticsEngine::run_startup_checks(int expected_sample_rate, int expected_channels) {
+    HealthStatus status;
+    status.ok = true;
+
+    // Mock checks - in reality these would query PortAudio directly
+    // Assuming PortAudio handles these inside its initialize, we just simulate the checks here
+    if (expected_sample_rate <= 0) {
+        status.ok = false;
+        status.sample_rate_ok = false;
+        status.message = "Invalid sample rate configured";
+    }
+    if (expected_channels <= 0) {
+        status.ok = false;
+        status.channel_mapping_ok = false;
+        status.message = "Invalid channel mapping";
+    }
+
+    return status;
+}
+
+// ============================================================================
 // APMSystem Implementation
 // ============================================================================
 
@@ -541,6 +858,8 @@ APMSystem::APMSystem(const Config& cfg)
       beamformer_(cfg.num_microphones, cfg.mic_spacing_m),
       echo_canceller_(2048),
       projector_(cfg.num_speakers, cfg.speaker_spacing_m) {
+
+    feedback_suppressor_.configure(cfg.sample_rate, 3, 12.0f);
 
 #ifdef HAVE_LOCAL_TRANSLATION
     try {
@@ -600,8 +919,28 @@ std::vector<AudioFrame> APMSystem::process(
         noise_suppressor_.suppress(
             echo_cancelled);
 
+    auto feedback_suppressed =
+        feedback_suppressor_.process(denoised);
+
     auto vad_result =
-        vad_.detect(denoised);
+        vad_.detect(feedback_suppressed);
+
+    // Update monitoring metrics
+    {
+        std::lock_guard<std::mutex> lock(metrics_mutex_);
+        current_metrics_.peak_db = feedback_suppressed.metadata().peak_db;
+        current_metrics_.rms_db = feedback_suppressed.metadata().rms_db;
+        current_metrics_.snr_db = vad_result.snr_db;
+        current_metrics_.clipping = feedback_suppressed.metadata().clipping;
+        // Mock latency update
+        current_metrics_.latency_ms = 4.2f;
+    }
+
+    // Call calibration engine
+    if (calibration_engine_.get_current_step() != AutoCalibrationEngine::Step::Idle &&
+        calibration_engine_.get_current_step() != AutoCalibrationEngine::Step::Complete) {
+        calibration_engine_.process_frame(feedback_suppressed);
+    }
 
     if (!vad_result.speech_detected) {
         return {};
@@ -627,6 +966,12 @@ void APMSystem::reset_all() {
     echo_canceller_.reset();
     noise_suppressor_.reset_state();
     vad_.reset();
+    feedback_suppressor_.reset();
+}
+
+MonitoringMetrics APMSystem::get_monitoring_metrics() const {
+    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    return current_metrics_;
 }
 
 } // namespace apm

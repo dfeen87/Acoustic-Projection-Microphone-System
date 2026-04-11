@@ -24,6 +24,70 @@ const APMDashboard = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('connected');
 
+  // New V7.0.0 State
+  const [metrics, setMetrics] = useState({ peak_db: -96, rms_db: -96, snr_db: 0, latency_ms: 0 });
+  const [diagnostics, setDiagnostics] = useState({ ok: true, message: 'OK' });
+  const [profiles, setProfiles] = useState([]);
+  const [activeProfile, setActiveProfile] = useState('Default');
+  const [showCalibration, setShowCalibration] = useState(false);
+  const [calibrationState, setCalibrationState] = useState({ step: 'Idle', progress: 0, result: null });
+
+  // Fetch metrics & diagnostics
+  useEffect(() => {
+    const fetchHealth = async () => {
+      try {
+        const diagRes = await fetch(`${API_BASE}/api/health/diagnostics`);
+        if (diagRes.ok) setDiagnostics(await diagRes.json());
+
+        const metRes = await fetch(`${API_BASE}/api/metrics`);
+        if (metRes.ok) setMetrics(await metRes.json());
+      } catch (e) {
+        setConnectionStatus('disconnected');
+      }
+    };
+
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch profiles
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/profiles`);
+        if (res.ok) {
+          const data = await res.json();
+          setProfiles(data.profiles);
+          setActiveProfile(data.active);
+        }
+      } catch (e) {}
+    };
+    fetchProfiles();
+  }, []);
+
+  // Calibration polling
+  useEffect(() => {
+    if (!showCalibration) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/calibration`);
+        if (res.ok) setCalibrationState(await res.json());
+      } catch (e) {}
+    }, 500);
+    return () => clearInterval(interval);
+  }, [showCalibration]);
+
+  const handleCalibrationAction = async (action) => {
+    try {
+      await fetch(`${API_BASE}/api/calibration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      });
+    } catch (e) {}
+  };
+
   // Audio visualization
   useEffect(() => {
     if (callState === 'connected') {
@@ -117,13 +181,18 @@ const APMDashboard = () => {
             </div>
             <div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                APM System v2.0
+                APM System v7.0
               </h1>
               <p className="text-sm text-gray-400">Acoustic Projection & Translation</p>
             </div>
           </div>
           
           <div className="flex items-center gap-4">
+            {!diagnostics.ok && (
+              <div className="flex items-center gap-2 bg-red-500/20 px-3 py-1 rounded-lg border border-red-500/50">
+                <span className="text-sm text-red-400">⚠️ {diagnostics.message}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2 bg-green-500/20 px-3 py-1 rounded-lg">
               {connectionStatus === 'connected' ? <Wifi className="w-4 h-4 text-green-400" /> : <WifiOff className="w-4 h-4 text-red-400" />}
               <span className="text-sm">{connectionStatus === 'connected' ? 'Connected' : 'Offline'}</span>
@@ -131,7 +200,7 @@ const APMDashboard = () => {
             
             <button 
               onClick={() => setShowSettings(!showSettings)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors settings-toggle"
             >
               <Settings className="w-5 h-5" />
             </button>
@@ -327,6 +396,77 @@ const APMDashboard = () => {
           )}
         </div>
 
+        {/* Calibration Modal */}
+        {showCalibration && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-purple-500/30 rounded-2xl p-6 max-w-md w-full">
+              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <Settings className="w-5 h-5 text-purple-400" />
+                Auto-Calibration
+              </h2>
+
+              <div className="mb-6">
+                <div className="flex justify-between text-sm mb-2 text-gray-400">
+                  <span>Progress</span>
+                  <span>{Math.round(calibrationState.progress * 100)}%</span>
+                </div>
+                <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 h-full transition-all duration-300"
+                    style={{ width: `${calibrationState.progress * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="bg-black/40 rounded-xl p-4 mb-6">
+                <h3 className="font-semibold text-purple-300 mb-2">Current Step: {calibrationState.step}</h3>
+                <p className="text-sm text-gray-400">
+                  {calibrationState.step === 'Idle' && 'Ready to begin calibration.'}
+                  {calibrationState.step === 'MeasureNoiseFloor' && 'Measuring ambient noise. Please remain quiet...'}
+                  {calibrationState.step === 'MeasureGain' && 'Please speak at a normal volume...'}
+                  {calibrationState.step === 'MeasureLatency' && 'Estimating round-trip latency...'}
+                  {calibrationState.step === 'Complete' && 'Calibration successful!'}
+                </p>
+
+                {calibrationState.result && (
+                  <div className="mt-4 pt-4 border-t border-white/10 space-y-2 text-sm text-green-300">
+                    <div>Noise Floor: {calibrationState.result.rms_noise_floor_db.toFixed(1)} dB</div>
+                    <div>Suggested Gain: {(calibrationState.result.recommended_input_gain * 100).toFixed(0)}%</div>
+                    <div>Est. Latency: {calibrationState.result.estimated_latency_ms.toFixed(1)} ms</div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    handleCalibrationAction('cancel');
+                    setShowCalibration(false);
+                  }}
+                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                >
+                  Close
+                </button>
+                {calibrationState.step === 'Idle' ? (
+                  <button
+                    onClick={() => handleCalibrationAction('start')}
+                    className="px-4 py-2 rounded-lg bg-purple-500 hover:bg-purple-600 transition-colors start-btn"
+                  >
+                    Start
+                  </button>
+                ) : calibrationState.step !== 'Complete' ? (
+                  <button
+                    onClick={() => handleCalibrationAction('advance')}
+                    className="px-4 py-2 rounded-lg bg-pink-500 hover:bg-pink-600 transition-colors next-step-btn"
+                  >
+                    Next Step
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Right Panel - Peers & Settings */}
         <div className="space-y-6">
           {/* Peers List */}
@@ -376,6 +516,46 @@ const APMDashboard = () => {
               </h2>
               
               <div className="space-y-4">
+                {/* Profiles & Calibration */}
+                <div className="pt-2 pb-4 border-b border-white/10">
+                  <div className="flex items-center justify-between mb-4">
+                    <label className="text-sm font-semibold text-gray-300">Active Profile</label>
+                    <button
+                      onClick={() => setShowCalibration(true)}
+                      className="text-xs bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 px-3 py-1 rounded-lg transition-colors border border-purple-500/30 run-calibration-btn"
+                    >
+                      Run Calibration
+                    </button>
+                  </div>
+                  <select
+                    value={activeProfile}
+                    onChange={(e) => setActiveProfile(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500 mb-2"
+                  >
+                    {profiles.map(p => (
+                      <option key={p.name} value={p.name}>{p.name}</option>
+                    ))}
+                  </select>
+
+                  {/* Real-time Metrics Mini-Display */}
+                  <div className="bg-black/40 rounded-lg p-3 mt-4 space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Peak Level</span>
+                      <span className={metrics.clipping ? "text-red-400 font-bold" : "text-green-400"}>
+                        {metrics.peak_db.toFixed(1)} dB {metrics.clipping && " (CLIP)"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">SNR</span>
+                      <span className="text-blue-400">{metrics.snr_db.toFixed(1)} dB</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Est. Latency</span>
+                      <span className="text-yellow-400">{metrics.latency_ms.toFixed(1)} ms</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <label className="text-sm text-gray-400 mb-2 block">Source Language</label>
                   <select 

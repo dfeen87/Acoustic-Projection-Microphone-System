@@ -5,6 +5,31 @@
 
 Production-grade implementation of an advanced acoustic projection microphone system with real-time translation capabilities.
 
+## Table of Contents
+
+- [Features](#features)
+- [🌍 Local Translation (100% Private)](#local-translation-100-private)
+- [Architecture](#architecture)
+- [🚀 Quick Start](#quick-start)
+- [🌐 REST API with Global Node Access](#rest-api-with-global-node-access)
+- [📊 Production Launcher Features](#production-launcher-features)
+- [🧪 System Validation](#system-validation)
+- [📁 Project Structure Overview](#project-structure-overview)
+- [🐳 Docker Deployment](#docker-deployment)
+- [🛠️ Troubleshooting](#troubleshooting)
+- [📊 Performance](#performance)
+- [💻 API Documentation](#api-documentation)
+- [🧪 Testing](#testing)
+- [⚙️ Configuration](#configuration)
+- [🤝 Contributing](#contributing)
+- [📜 System Requirements](#system-requirements)
+- [🎯 What's Next](#whats-next)
+- [License](#license)
+- [🙏 Acknowledgments](#acknowledgments)
+- [📚 References](#references)
+- [📖 Citation](#citation)
+- [📧 Support](#support)
+
 ## Features
 
 - **Advanced Beamforming**: Delay-and-sum, superdirective, and adaptive null-steering algorithms
@@ -21,6 +46,14 @@ Production-grade implementation of an advanced acoustic projection microphone sy
 - **High Performance**: FFTW-optimized FFT with STFT support, multi-threaded processing, SIMD-ready
 - **Production Launcher**: Enterprise-grade startup system with automatic health checks and monitoring
 - **REST API with Global Node Access**: FastAPI-based REST API for peer discovery and session management across all network nodes
+
+## New in Version 7.0.0
+
+- **Auto-Calibration Mode**: Streamlines initial setup by automatically tuning key system parameters.
+- **Real-Time Monitoring Dashboard**: Expands live visibility into system status and processing behavior.
+- **Adaptive Feedback Suppression**: Reduces acoustic feedback dynamically during operation.
+- **Preset Profiles**: Adds ready-to-use configuration profiles for common deployment scenarios.
+- **Diagnostics**: Improves troubleshooting with clearer runtime checks and diagnostic reporting.
 
 ## 🌍 Local Translation (100% Private)
 

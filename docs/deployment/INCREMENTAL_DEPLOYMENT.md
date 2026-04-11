@@ -1,4 +1,4 @@
-# APM System v2.0 - Incremental Deployment Guide
+# APM System v7.0 - Incremental Deployment Guide
 
 This guide shows you how to deploy v2.0 features incrementally, building and testing at each stage.
 

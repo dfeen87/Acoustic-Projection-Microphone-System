@@ -1,4 +1,4 @@
-# APM System v2.0 - Incremental Deployment Guide
+# APM System v7.0 - Incremental Deployment Guide
 
 This guide shows you how to deploy v2.0 features incrementally, building and testing at each stage.
 
@@ -313,8 +313,8 @@ A: Yes! The updated CMakeLists.txt is smart about what exists.
 **Q: What's the minimum for v2.0?**  
 A: Stage 1 (core implementation). Everything else is polish.
 
-**Q: When should I tag v2.0.0?**  
-A: After Stage 3 (tests passing). Stage 4-5 can be v2.0.1+
+**Q: When should I tag v7.0.0?**  
+A: After Stage 3 (tests passing). Stage 4-5 can be v7.0.1+
 
 **Q: What if I only want to add implementation now?**  
 A: Perfect! Add Stage 1 files, build, test. Ship it. Add examples later.
@@ -353,7 +353,7 @@ A: Perfect! Add Stage 1 files, build, test. Ship it. Add examples later.
 
 ```
 ✅ CMake configures successfully
-✅ Version 2.0.0 recognized
+✅ Version 7.0.0 recognized
 ✅ Local Translation: ON
 ✅ FFTW3: Yes
 ✅ Core library builds

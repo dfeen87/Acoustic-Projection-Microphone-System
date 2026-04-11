@@ -818,4 +818,4 @@ If you use this work in research, please cite:
 
 ---
 
-**Status**: Production Ready | **Version**: 6.1.1 | **Last Updated**: April 2026
+**Status**: Production Ready | **Version**: 7.0.0 | **Last Updated**: April 2026

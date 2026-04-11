@@ -189,7 +189,7 @@ These are intentionally deferred to avoid premature complexity.
 
 ## Status
 
-This document reflects current operational understanding as of **v2.3.0**.
+This document reflects current operational understanding as of **v7.0.0**.
 
 Operational guidance will evolve conservatively as real deployment
 experience accumulates.

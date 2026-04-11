@@ -32,7 +32,7 @@ public:
         // Initialize log entries
         add_log("INFO", "APM Developer Console initialized");
         add_log("INFO", "Connecting to APM backend...");
-        add_log("SUCCESS", "Connected to APM System v2.0.0");
+        add_log("SUCCESS", "Connected to APM System v7.0.0");
         
         // Initialize performance metrics
         metrics.push_back({"CPU Usage", 0.0f, 100.0f, {}});
@@ -181,7 +181,7 @@ private:
     void render_status_window() {
         ImGui::Begin("System Status", &show_status);
         
-        ImGui::Text("APM System v2.0.0");
+        ImGui::Text("APM System v7.0.0");
         ImGui::Separator();
         
         // Connection status

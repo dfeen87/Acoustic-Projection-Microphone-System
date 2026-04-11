@@ -2,6 +2,12 @@
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/)
+![Python](https://img.shields.io/badge/python-3.10+-blueviolet)
+![React](https://img.shields.io/badge/react-18.0+-61dafb)
+![Version](https://img.shields.io/badge/version-7.0.0-blue)
+![Status](https://img.shields.io/badge/status-active-success)
+![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows-lightgrey)
+![Build](https://img.shields.io/badge/build-Vite%20%7C%20CMake-orange)
 
 Production-grade implementation of an advanced acoustic projection microphone system with real-time translation capabilities.
 

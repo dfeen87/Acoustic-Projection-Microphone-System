@@ -31,7 +31,7 @@ Status: Planning Phase
 - Basic documentation + diagrams
 - Integration of Local Translation Engine into live pipeline
 
-### **Version 7.0.0 — Intelligence**
+### **Intelligence Phase**
 - Optional OpenAI Whisper (cloud)
 - Optional Google Cloud Speech/Translate
 - Performance profiling tools
@@ -39,7 +39,7 @@ Status: Planning Phase
 - Advanced presets (beamforming profiles, noise models)
 - Latency + throughput optimization for local translation
 
-### **Version 7.0.0 — Production**
+### **Production Phase**
 - Comprehensive test coverage (>80%)
 - Packaging (DEB / RPM / Homebrew)
 - Full API documentation (Doxygen)

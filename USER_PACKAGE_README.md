@@ -429,8 +429,6 @@ See LICENSE file for full terms.
 ### 7.0.0
 - Documentation polish and onboarding improvements
 - Version alignment across all components
-
-### 7.0.0
 - Initial release
 - Offline + online translation
 - Noise/echo cancellation

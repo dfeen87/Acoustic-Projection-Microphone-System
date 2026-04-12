@@ -56,8 +56,7 @@ async def lifespan(app: FastAPI):
 
     telemetry_client = getattr(app.state, "telemetry_client", None)
     if telemetry_client is None:
-        telemetry_client = TelemetryClient()
-        app.state.telemetry_client = telemetry_client
+        raise RuntimeError("TelemetryClient must be injected via backend/main.py before app startup")
     await telemetry_client.start()
 
     yield

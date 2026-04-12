@@ -11,8 +11,146 @@
 #include <cmath>
 #include <algorithm>
 #include <iomanip>
+#include <sstream>
+
+#ifdef _WIN32
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #pragma comment(lib, "ws2_32.lib")
+#else
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+    #define SOCKET int
+    #define INVALID_SOCKET -1
+    #define SOCKET_ERROR -1
+    #define closesocket close
+#endif
 
 using namespace apm;
+
+class TelemetryServer {
+    SOCKET server_socket_{INVALID_SOCKET};
+    SOCKET client_socket_{INVALID_SOCKET};
+    std::mutex client_mutex_;
+    std::atomic<bool> running_{false};
+    std::thread accept_thread_;
+
+    void accept_loop() {
+        while (running_) {
+            fd_set read_fds;
+            FD_ZERO(&read_fds);
+            FD_SET(server_socket_, &read_fds);
+
+            struct timeval tv;
+            tv.tv_sec = 0;
+            tv.tv_usec = 100000; // 100ms timeout
+
+            int select_res = select(server_socket_ + 1, &read_fds, nullptr, nullptr, &tv);
+            if (select_res > 0 && FD_ISSET(server_socket_, &read_fds)) {
+                struct sockaddr_in client_addr;
+                socklen_t client_len = sizeof(client_addr);
+                SOCKET new_client = accept(server_socket_, (struct sockaddr*)&client_addr, &client_len);
+
+                if (new_client != INVALID_SOCKET) {
+                    std::lock_guard<std::mutex> lock(client_mutex_);
+                    // Close existing connection if any (only support one telemetry listener)
+                    if (client_socket_ != INVALID_SOCKET) {
+                        closesocket(client_socket_);
+                    }
+                    client_socket_ = new_client;
+                }
+            }
+        }
+    }
+
+public:
+    TelemetryServer() = default;
+
+    ~TelemetryServer() {
+        stop();
+    }
+
+    bool start(int port = 50055) {
+#ifdef _WIN32
+        WSADATA wsaData;
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) return false;
+#endif
+
+        server_socket_ = socket(AF_INET, SOCK_STREAM, 0);
+        if (server_socket_ == INVALID_SOCKET) return false;
+
+        int opt = 1;
+        setsockopt(server_socket_, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
+
+        struct sockaddr_in server_addr;
+        server_addr.sin_family = AF_INET;
+        server_addr.sin_addr.s_addr = INADDR_ANY;
+        server_addr.sin_port = htons(port);
+
+        if (bind(server_socket_, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
+            closesocket(server_socket_);
+            return false;
+        }
+
+        if (listen(server_socket_, 1) == SOCKET_ERROR) {
+            closesocket(server_socket_);
+            return false;
+        }
+
+        running_ = true;
+        accept_thread_ = std::thread(&TelemetryServer::accept_loop, this);
+        return true;
+    }
+
+    void stop() {
+        running_ = false;
+        if (accept_thread_.joinable()) {
+            accept_thread_.join();
+        }
+        {
+            std::lock_guard<std::mutex> lock(client_mutex_);
+            if (client_socket_ != INVALID_SOCKET) {
+                closesocket(client_socket_);
+                client_socket_ = INVALID_SOCKET;
+            }
+        }
+        if (server_socket_ != INVALID_SOCKET) {
+            closesocket(server_socket_);
+            server_socket_ = INVALID_SOCKET;
+        }
+#ifdef _WIN32
+        WSACleanup();
+#endif
+    }
+
+    bool send_metrics(const apm::MonitoringMetrics& metrics) {
+        std::lock_guard<std::mutex> lock(client_mutex_);
+        if (client_socket_ == INVALID_SOCKET) return false;
+
+        std::ostringstream json;
+        json << "{\"peak_db\":" << metrics.peak_db
+             << ",\"rms_db\":" << metrics.rms_db
+             << ",\"snr_db\":" << metrics.snr_db
+             << ",\"clipping\":" << (metrics.clipping ? "true" : "false")
+             << ",\"latency_ms\":" << metrics.latency_ms << "}\n";
+
+        std::string payload = json.str();
+#ifdef _WIN32
+        int flags = 0;
+#else
+        int flags = MSG_NOSIGNAL; // Ignore SIGPIPE on Linux
+#endif
+        int sent = send(client_socket_, payload.c_str(), payload.length(), flags);
+        if (sent == SOCKET_ERROR) {
+            closesocket(client_socket_);
+            client_socket_ = INVALID_SOCKET;
+            return false;
+        }
+        return true;
+    }
+};
 
 // Thread-safe queue for buffering audio chunks
 template <typename T>
@@ -200,13 +338,24 @@ int main() {
         std::cout << "Audio started. Press Ctrl+C to stop." << std::endl;
     }
     
+    // Start telemetry server
+    TelemetryServer telemetry;
+    if (telemetry.start(50055)) {
+        std::cout << "Telemetry server started on port 50055." << std::endl;
+    } else {
+        std::cerr << "Failed to start telemetry server." << std::endl;
+    }
+
     // Main loop
     int print_counter = 0;
     while (g_running) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(20)); // ~50Hz update rate
+
+        auto metrics = apm.get_monitoring_metrics();
+        telemetry.send_metrics(metrics);
+
         print_counter++;
-        if (print_counter >= 20) { // Every 2 seconds
-            auto metrics = apm.get_monitoring_metrics();
+        if (print_counter >= 100) { // Every 2 seconds (100 * 20ms)
             std::cout << "\r[Monitoring] Peak: " << std::fixed << std::setprecision(1) << metrics.peak_db
                       << "dB, SNR: " << metrics.snr_db << "dB, Latency: " << metrics.latency_ms << "ms     "
                       << std::flush;
@@ -214,6 +363,7 @@ int main() {
         }
     }
     std::cout << "\nStopping..." << std::endl;
+    telemetry.stop();
     audio.stop();
     if (processing_thread.joinable()) {
         processing_thread.join();

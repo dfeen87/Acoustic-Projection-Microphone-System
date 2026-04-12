@@ -32,22 +32,45 @@ const APMDashboard = () => {
   const [showCalibration, setShowCalibration] = useState(false);
   const [calibrationState, setCalibrationState] = useState({ step: 'Idle', progress: 0, result: null });
 
-  // Fetch metrics & diagnostics
+  // Fetch diagnostics (1Hz)
   useEffect(() => {
-    const fetchHealth = async () => {
+    const fetchDiagnostics = async () => {
       try {
         const diagRes = await fetch(`${API_BASE}/api/health/diagnostics`);
         if (diagRes.ok) setDiagnostics(await diagRes.json());
-
-        const metRes = await fetch(`${API_BASE}/api/metrics`);
-        if (metRes.ok) setMetrics(await metRes.json());
       } catch (e) {
         setConnectionStatus('disconnected');
       }
     };
 
-    fetchHealth();
-    const interval = setInterval(fetchHealth, 1000);
+    fetchDiagnostics();
+    const interval = setInterval(fetchDiagnostics, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch real-time telemetry metrics (4Hz)
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        const metRes = await fetch(`${API_BASE}/api/metrics`);
+        if (metRes.ok) {
+          const data = await metRes.json();
+          setMetrics(data);
+
+          if (data.offline) {
+            setConnectionStatus('degraded');
+          } else {
+            setConnectionStatus('connected');
+          }
+        }
+      } catch (e) {
+        // Fallback handled in diagnostics fetch, but we might set degraded
+        setConnectionStatus('degraded');
+      }
+    };
+
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, 250);
     return () => clearInterval(interval);
   }, []);
 
@@ -538,20 +561,30 @@ const APMDashboard = () => {
                   </select>
 
                   {/* Real-time Metrics Mini-Display */}
-                  <div className="bg-black/40 rounded-lg p-3 mt-4 space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Peak Level</span>
-                      <span className={metrics.clipping ? "text-red-400 font-bold" : "text-green-400"}>
-                        {metrics.peak_db.toFixed(1)} dB {metrics.clipping && " (CLIP)"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">SNR</span>
-                      <span className="text-blue-400">{metrics.snr_db.toFixed(1)} dB</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Est. Latency</span>
-                      <span className="text-yellow-400">{metrics.latency_ms.toFixed(1)} ms</span>
+                  <div className="bg-black/40 rounded-lg p-3 mt-4 space-y-2 text-xs relative overflow-hidden">
+                    {metrics.offline && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 backdrop-blur-sm">
+                        <span className="text-red-400 font-semibold flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                          Telemetry Offline
+                        </span>
+                      </div>
+                    )}
+                    <div className={`transition-opacity ${metrics.offline ? 'opacity-30' : 'opacity-100'}`}>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Peak Level</span>
+                        <span className={metrics.clipping ? "text-red-400 font-bold" : "text-green-400"}>
+                          {metrics.peak_db.toFixed(1)} dB {metrics.clipping && " (CLIP)"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between mt-2">
+                        <span className="text-gray-400">SNR</span>
+                        <span className="text-blue-400">{metrics.snr_db.toFixed(1)} dB</span>
+                      </div>
+                      <div className="flex justify-between mt-2">
+                        <span className="text-gray-400">Est. Latency</span>
+                        <span className="text-yellow-400">{metrics.latency_ms.toFixed(1)} ms</span>
+                      </div>
                     </div>
                   </div>
                 </div>

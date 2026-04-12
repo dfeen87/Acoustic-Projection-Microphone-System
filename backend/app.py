@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from backend.storage import Storage
+from backend.telemetry import TelemetryClient, get_latest_metrics
 
 # ---------------------------------------------------------------------------
 # API key authentication middleware (opt-in via APM_API_KEY env variable).
@@ -52,10 +53,15 @@ async def lifespan(app: FastAPI):
     app.state.housekeeper_task = asyncio.create_task(
         session_housekeeper(storage, app.state.stop_event)
     )
+
+    app.state.telemetry_client = TelemetryClient()
+    await app.state.telemetry_client.start()
+
     yield
     # ---------- shutdown ----------
     app.state.stop_event.set()
     await app.state.housekeeper_task
+    await app.state.telemetry_client.stop()
 
 
 app = FastAPI(title="APM FastAPI Backend", version="7.0.0", lifespan=lifespan)
@@ -154,12 +160,7 @@ def get_diagnostics():
 
 @app.get("/api/metrics")
 def get_metrics():
-    import random
-    # Jitter the metrics slightly for visual effect in UI
-    mock_metrics["peak_db"] = -12.0 + random.uniform(-2, 2)
-    mock_metrics["rms_db"] = -24.0 + random.uniform(-1, 1)
-    mock_metrics["snr_db"] = 15.0 + random.uniform(-0.5, 0.5)
-    return mock_metrics
+    return get_latest_metrics()
 
 @app.get("/api/profiles")
 def list_profiles():

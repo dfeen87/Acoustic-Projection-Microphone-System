@@ -30,6 +30,9 @@ from pathlib import Path
 # Ensure backend module is importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import backend.app as backend_app
+from backend.telemetry import TelemetryClient
+
 logging.basicConfig(
     level=logging.INFO,
     format='[%(asctime)s] [%(levelname)s] %(message)s',
@@ -101,6 +104,7 @@ def main():
     
     try:
         import uvicorn
+        backend_app.app.state.telemetry_client = TelemetryClient()
         uvicorn.run(
             "backend.app:app",
             host=args.host,

@@ -30,6 +30,16 @@
 
 using namespace apm;
 
+std::string serialize_metrics(const apm::MonitoringMetrics& metrics) {
+    std::ostringstream json;
+    json << "{\"peak_db\":" << metrics.peak_db
+         << ",\"rms_db\":" << metrics.rms_db
+         << ",\"snr_db\":" << metrics.snr_db
+         << ",\"clipping\":" << (metrics.clipping ? "true" : "false")
+         << ",\"latency_ms\":" << metrics.latency_ms << "}\n";
+    return json.str();
+}
+
 class TelemetryServer {
     SOCKET server_socket_{INVALID_SOCKET};
     SOCKET client_socket_{INVALID_SOCKET};
@@ -129,14 +139,7 @@ public:
         std::lock_guard<std::mutex> lock(client_mutex_);
         if (client_socket_ == INVALID_SOCKET) return false;
 
-        std::ostringstream json;
-        json << "{\"peak_db\":" << metrics.peak_db
-             << ",\"rms_db\":" << metrics.rms_db
-             << ",\"snr_db\":" << metrics.snr_db
-             << ",\"clipping\":" << (metrics.clipping ? "true" : "false")
-             << ",\"latency_ms\":" << metrics.latency_ms << "}\n";
-
-        std::string payload = json.str();
+        std::string payload = serialize_metrics(metrics);
 #ifdef _WIN32
         int flags = 0;
 #else

@@ -54,14 +54,17 @@ async def lifespan(app: FastAPI):
         session_housekeeper(storage, app.state.stop_event)
     )
 
-    app.state.telemetry_client = TelemetryClient()
-    await app.state.telemetry_client.start()
+    telemetry_client = getattr(app.state, "telemetry_client", None)
+    if telemetry_client is None:
+        telemetry_client = TelemetryClient()
+        app.state.telemetry_client = telemetry_client
+    await telemetry_client.start()
 
     yield
     # ---------- shutdown ----------
     app.state.stop_event.set()
     await app.state.housekeeper_task
-    await app.state.telemetry_client.stop()
+    await telemetry_client.stop()
 
 
 app = FastAPI(title="APM FastAPI Backend", version="7.0.0", lifespan=lifespan)

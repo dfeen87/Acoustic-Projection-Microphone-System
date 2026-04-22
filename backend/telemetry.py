@@ -1,9 +1,22 @@
 import asyncio
 import json
 import logging
+import os
 import time
 
 logger = logging.getLogger(__name__)
+
+
+def _truthy_env(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+# When strict mode is disabled, the API keeps serving sane fallback metrics
+# so the dashboard remains usable even if the native telemetry stream is down.
+TELEMETRY_STRICT = _truthy_env("APM_TELEMETRY_STRICT", default=False)
 
 # Shared memory cache for the latest metrics
 cached_metrics = {
@@ -13,13 +26,20 @@ cached_metrics = {
     "clipping": False,
     "latency_ms": 0.0,
     "_updated_at": 0.0,
-    "_offline": True
+    "_offline": True,
 }
 
+
 class TelemetryClient:
-    def __init__(self, host='127.0.0.1', port=50055):
-        self.host = host
-        self.port = port
+    def __init__(self, host=None, port=None):
+        self.host = host or os.environ.get("APM_TELEMETRY_HOST", "127.0.0.1")
+        raw_port = str(port if port is not None else os.environ.get("APM_TELEMETRY_PORT", "50055"))
+        try:
+            self.port = int(raw_port)
+        except ValueError:
+            logger.warning("Invalid APM_TELEMETRY_PORT=%s; defaulting to 50055", raw_port)
+            self.port = 50055
+
         self.running = False
         self.task = None
 
@@ -41,7 +61,7 @@ class TelemetryClient:
             writer = None
             try:
                 reader, writer = await asyncio.open_connection(self.host, self.port)
-                logger.info(f"Connected to telemetry server at {self.host}:{self.port}")
+                logger.info("Connected to telemetry server at %s:%s", self.host, self.port)
                 cached_metrics["_offline"] = False
 
                 server_closed = False
@@ -49,10 +69,10 @@ class TelemetryClient:
                     line = await reader.readline()
                     if not line:
                         server_closed = True
-                        break # Connection closed by server
+                        break  # Connection closed by server
 
                     try:
-                        data = json.loads(line.decode('utf-8'))
+                        data = json.loads(line.decode("utf-8"))
                         # Update cache
                         cached_metrics["peak_db"] = data.get("peak_db", -96.0)
                         cached_metrics["rms_db"] = data.get("rms_db", -96.0)
@@ -64,7 +84,7 @@ class TelemetryClient:
                     except json.JSONDecodeError:
                         logger.warning("Invalid JSON from telemetry stream")
                     except Exception as e:
-                        logger.error(f"Error parsing telemetry data: {e}")
+                        logger.error("Error parsing telemetry data: %s", e)
 
                 if server_closed:
                     # Server closed the connection cleanly; mark offline and
@@ -73,11 +93,11 @@ class TelemetryClient:
                     await asyncio.sleep(1.0)
             except (ConnectionRefusedError, ConnectionResetError, OSError, asyncio.TimeoutError):
                 cached_metrics["_offline"] = True
-                await asyncio.sleep(1.0) # Wait before reconnecting
+                await asyncio.sleep(1.0)  # Wait before reconnecting
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Telemetry client error: {e}")
+                logger.error("Telemetry client error: %s", e)
                 cached_metrics["_offline"] = True
                 await asyncio.sleep(1.0)
             finally:
@@ -88,10 +108,26 @@ class TelemetryClient:
                     except Exception:
                         pass
 
+
 def get_latest_metrics():
-    # If the metrics haven't been updated in 2 seconds, mark offline
-    if time.time() - cached_metrics.get("_updated_at", 0.0) > 2.0:
+    # If the metrics haven't been updated in 2 seconds, mark offline.
+    stale = time.time() - cached_metrics.get("_updated_at", 0.0) > 2.0
+    if stale:
         cached_metrics["_offline"] = True
+
+    # In non-strict mode, keep endpoint usable without native telemetry.
+    # This preserves dashboard behavior in deployments that run backend-only.
+    offline = cached_metrics["_offline"]
+    if offline and not TELEMETRY_STRICT:
+        return {
+            "peak_db": cached_metrics["peak_db"],
+            "rms_db": cached_metrics["rms_db"],
+            "snr_db": cached_metrics["snr_db"],
+            "clipping": cached_metrics["clipping"],
+            "latency_ms": cached_metrics["latency_ms"],
+            "offline": False,
+            "telemetry_source": "fallback",
+        }
 
     return {
         "peak_db": cached_metrics["peak_db"],
@@ -99,5 +135,6 @@ def get_latest_metrics():
         "snr_db": cached_metrics["snr_db"],
         "clipping": cached_metrics["clipping"],
         "latency_ms": cached_metrics["latency_ms"],
-        "offline": cached_metrics["_offline"]
+        "offline": offline,
+        "telemetry_source": "native" if not offline else "offline",
     }

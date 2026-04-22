@@ -38,14 +38,17 @@ class TelemetryClient:
 
     async def _listen_loop(self):
         while self.running:
+            writer = None
             try:
                 reader, writer = await asyncio.open_connection(self.host, self.port)
                 logger.info(f"Connected to telemetry server at {self.host}:{self.port}")
                 cached_metrics["_offline"] = False
 
+                server_closed = False
                 while self.running:
                     line = await reader.readline()
                     if not line:
+                        server_closed = True
                         break # Connection closed by server
 
                     try:
@@ -62,7 +65,13 @@ class TelemetryClient:
                         logger.warning("Invalid JSON from telemetry stream")
                     except Exception as e:
                         logger.error(f"Error parsing telemetry data: {e}")
-            except (ConnectionRefusedError, ConnectionResetError, asyncio.TimeoutError):
+
+                if server_closed:
+                    # Server closed the connection cleanly; mark offline and
+                    # wait before attempting to reconnect.
+                    cached_metrics["_offline"] = True
+                    await asyncio.sleep(1.0)
+            except (ConnectionRefusedError, ConnectionResetError, OSError, asyncio.TimeoutError):
                 cached_metrics["_offline"] = True
                 await asyncio.sleep(1.0) # Wait before reconnecting
             except asyncio.CancelledError:
@@ -71,6 +80,13 @@ class TelemetryClient:
                 logger.error(f"Telemetry client error: {e}")
                 cached_metrics["_offline"] = True
                 await asyncio.sleep(1.0)
+            finally:
+                if writer is not None:
+                    try:
+                        writer.close()
+                        await writer.wait_closed()
+                    except Exception:
+                        pass
 
 def get_latest_metrics():
     # If the metrics haven't been updated in 2 seconds, mark offline

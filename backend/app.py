@@ -53,6 +53,49 @@ SESSION_CLEANUP_INTERVAL_SECONDS = 5
 SESSION_PURGE_AFTER_SECONDS = 10 * 60
 
 
+def _extract_request_ip(request: Request) -> str:
+    """Best-effort client IP extraction (proxy-aware)."""
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        first_hop = forwarded_for.split(",", 1)[0].strip()
+        if first_hop:
+            return first_hop
+
+    real_ip = request.headers.get("x-real-ip", "").strip()
+    if real_ip:
+        return real_ip
+
+    if request.client and request.client.host:
+        return request.client.host
+    return "127.0.0.1"
+
+
+def _ensure_request_peer(request: Request) -> dict:
+    """Ensure each web client IP has a stable peer identity in storage."""
+    storage: Storage = app.state.storage
+    now = time.time()
+    client_ip = _extract_request_ip(request)
+    peer_id = f"web-{client_ip.replace('.', '-').replace(':', '-')}"
+    peer = storage.get_peer(peer_id)
+    if not peer:
+        peer = {
+            "id": peer_id,
+            "name": f"Web {client_ip}",
+            "ip": client_ip,
+            "status": "online",
+            "last_seen": now,
+        }
+        storage.upsert_peer(peer)
+        return peer
+
+    if peer["ip"] != client_ip or peer["status"] == "offline":
+        peer["ip"] = client_ip
+        peer["status"] = "online"
+    peer["last_seen"] = now
+    storage.upsert_peer(peer)
+    return peer
+
+
 async def session_housekeeper(storage: Storage, stop_event: asyncio.Event) -> None:
     while not stop_event.is_set():
         now = time.time()
@@ -275,8 +318,9 @@ def control_calibration(action: CalibrationStart):
     return mock_calibration_state
 
 @app.get("/api/peers")
-def list_peers():
+def list_peers(request: Request):
     storage: Storage = app.state.storage
+    _ensure_request_peer(request)
     now = time.time()
     peers_out = []
     for peer in storage.list_peers():
@@ -298,8 +342,9 @@ def add_peer(body: PeerCreate):
     return {"ok": True, "peer": peer}
 
 @app.delete("/api/peers/{peer_id}")
-def remove_peer(peer_id: str):
-    if peer_id == app.state.local_peer_id:
+def remove_peer(peer_id: str, request: Request):
+    local_peer = _ensure_request_peer(request)
+    if peer_id == local_peer["id"]:
         raise HTTPException(403, "Cannot delete the local peer")
     storage: Storage = app.state.storage
     if not storage.get_peer(peer_id):
@@ -308,24 +353,17 @@ def remove_peer(peer_id: str):
     return {"ok": True}
 
 @app.get("/api/status")
-def get_status():
-    storage: Storage = app.state.storage
-    local_id = app.state.local_peer_id
-    peer = storage.get_peer(local_id)
-    if not peer:
-        raise HTTPException(500, "Local peer missing")
-    return {"status": peer["status"], "peer_id": local_id}
+def get_status(request: Request):
+    local_peer = _ensure_request_peer(request)
+    return {"status": local_peer["status"], "peer_id": local_peer["id"]}
 
 @app.post("/api/status")
-def update_status(body: StatusUpdate):
+def update_status(body: StatusUpdate, request: Request):
     storage: Storage = app.state.storage
-    local_id = app.state.local_peer_id
-    peer = storage.get_peer(local_id)
-    if not peer:
-        raise HTTPException(500, "Local peer missing")
+    local_peer = _ensure_request_peer(request)
     now = time.time()
-    storage.update_peer_status(local_id, body.status, now)
-    return {"ok": True, "peer": {"id": local_id, "status": body.status}}
+    storage.update_peer_status(local_peer["id"], body.status, now)
+    return {"ok": True, "peer": {"id": local_peer["id"], "status": body.status}}
 
 @app.get("/api/peers/{peer_id}")
 def peer_details(peer_id: str):
@@ -344,18 +382,17 @@ def peer_details(peer_id: str):
 
 # Sessions (your hook monitors /api/session/{id})
 @app.post("/api/session")
-def create_session(peer_id: str):
+def create_session(peer_id: str, request: Request):
     storage: Storage = app.state.storage
     peer = storage.get_peer(peer_id)
     if not peer:
         raise HTTPException(404, "Peer not found")
     session = storage.create_session(peer_id)
-    local_peer_id = app.state.local_peer_id
-    local_peer = storage.get_peer(local_peer_id)
+    local_peer = _ensure_request_peer(request)
 
     # Best-effort cross-instance signaling: notify the remote peer backend
     # by IP so it can create a matching incoming session for its local user.
-    if local_peer:
+    if local_peer and not str(peer["id"]).startswith("web-"):
         notify_payload = {
             "session_id": session["id"],
             "caller_peer_id": local_peer["id"],
@@ -383,9 +420,9 @@ def create_session(peer_id: str):
     return {"session": Session(**session).model_dump()}
 
 @app.get("/api/session/incoming")
-def get_incoming_session():
+def get_incoming_session(request: Request):
     storage: Storage = app.state.storage
-    local_id = app.state.local_peer_id
+    local_id = _ensure_request_peer(request)["id"]
     session = storage.get_latest_session_for_peer(local_id, ["calling", "ringing"])
     if not session:
         return {"session": None}

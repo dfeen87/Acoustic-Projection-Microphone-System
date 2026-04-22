@@ -110,6 +110,7 @@ const APMDashboard = () => {
   );
   const [serverAuthEnabled, setServerAuthEnabled] = useState(false);
   const [onlineStatus, setOnlineStatus] = useState("online");
+  const [incomingPopupVisible, setIncomingPopupVisible] = useState(false);
 
   const addToast = (message) => {
     const id = Date.now();
@@ -436,6 +437,7 @@ const APMDashboard = () => {
     }
     setCallState("idle");
     setActiveSession(null);
+    setIncomingPopupVisible(false);
     setTranslations([]);
     addToast("Call ended");
   };
@@ -449,6 +451,7 @@ const APMDashboard = () => {
       } catch (e) {}
     }
     setCallState("connected");
+    setIncomingPopupVisible(false);
     addToast(`Connected to ${activeSession?.peer?.name}`);
   };
 
@@ -462,7 +465,43 @@ const APMDashboard = () => {
     }
     setCallState("idle");
     setActiveSession(null);
+    setIncomingPopupVisible(false);
   };
+
+  useEffect(() => {
+    if (callState === "connected" || callState === "calling") return;
+    const pollIncomingSession = async () => {
+      try {
+        const res = await apiFetch("/api/session/incoming");
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (!data.session) {
+          if (callState === "ringing" && !activeSession) {
+            setCallState("idle");
+            setIncomingPopupVisible(false);
+          }
+          return;
+        }
+
+        const incomingSessionId = data.session.id;
+        if (!activeSession || activeSession.id !== incomingSessionId) {
+          setActiveSession({
+            id: incomingSessionId,
+            peer: { id: data.session.peer_id, name: "Incoming caller" },
+            startTime: Date.now(),
+            encrypted: encryptionEnabled,
+          });
+        }
+        setCallState("ringing");
+        setIncomingPopupVisible(true);
+      } catch (e) {}
+    };
+
+    pollIncomingSession();
+    const interval = setInterval(pollIncomingSession, 1000);
+    return () => clearInterval(interval);
+  }, [callState, activeSession, encryptionEnabled]);
 
   useEffect(() => {
     if (!activeSession || callState === "idle") return;
@@ -556,6 +595,43 @@ const APMDashboard = () => {
               Free tier instances sleep after inactivity. This takes about 30–60
               seconds.
             </p>
+          </div>
+        </div>
+      )}
+
+      {incomingPopupVisible && callState === "ringing" && activeSession && (
+        <div className="fixed right-4 top-4 z-[70] w-full max-w-sm rounded-2xl border border-purple-400/50 bg-slate-900/95 p-4 shadow-2xl backdrop-blur">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-purple-300">
+                Incoming call
+              </p>
+              <p className="mt-1 text-lg font-semibold text-white">
+                {activeSession?.peer?.name || "Incoming caller"}
+              </p>
+              <p className="text-xs text-slate-300">Session: {activeSession.id}</p>
+            </div>
+            <button
+              onClick={rejectCall}
+              className="rounded-full p-1 text-slate-300 transition hover:bg-slate-700 hover:text-white"
+              aria-label="Dismiss incoming call popup"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={acceptCall}
+              className="flex-1 rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold transition hover:bg-green-500"
+            >
+              Accept
+            </button>
+            <button
+              onClick={rejectCall}
+              className="flex-1 rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold transition hover:bg-red-500"
+            >
+              Decline
+            </button>
           </div>
         </div>
       )}

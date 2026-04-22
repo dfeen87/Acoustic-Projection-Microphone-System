@@ -211,7 +211,8 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Local Translation Engine")
-    parser.add_argument("audio_file", help="Audio file to transcribe/translate")
+    parser.add_argument("audio_file", nargs="?", help="Audio file to transcribe/translate")
+    parser.add_argument("--text", help="Text to translate directly without transcription")
     parser.add_argument("--source", default="en", help="Source language code")
     parser.add_argument("--target", default="es", help="Target language code")
     parser.add_argument("--whisper-model", default="small", help="Whisper model size")
@@ -236,11 +237,31 @@ def main():
     )
     
     # Process
-    result = engine.transcribe_and_translate(
-        args.audio_file,
-        source_lang=args.source,
-        target_lang=args.target
-    )
+    if args.text is not None:
+        lang_map = {
+            "en": "eng_Latn", "es": "spa_Latn", "fr": "fra_Latn",
+            "de": "deu_Latn", "it": "ita_Latn", "pt": "por_Latn",
+            "ru": "rus_Cyrl", "zh": "zho_Hans", "ja": "jpn_Jpan",
+            "ko": "kor_Hang", "ar": "arb_Arab", "hi": "hin_Deva"
+        }
+        nllb_source = lang_map.get(args.source, "eng_Latn")
+        nllb_target = lang_map.get(args.target, "spa_Latn")
+        translated = engine.translate(args.text, nllb_source, nllb_target)
+        result = {
+            "transcribed_text": args.text,
+            "translated_text": translated,
+            "source_language": args.source,
+            "target_language": args.target,
+            "success": True
+        }
+    else:
+        if not args.audio_file:
+            parser.error("audio_file is required when --text is not provided")
+        result = engine.transcribe_and_translate(
+            args.audio_file,
+            source_lang=args.source,
+            target_lang=args.target
+        )
     
     # Output
     if args.json:

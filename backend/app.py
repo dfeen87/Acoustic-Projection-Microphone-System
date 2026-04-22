@@ -2,6 +2,8 @@ import asyncio
 import json
 import os
 import secrets
+import subprocess
+import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -218,6 +220,18 @@ class ProfileCreate(BaseModel):
 class CalibrationStart(BaseModel):
     action: Literal["start", "cancel", "advance"]
 
+class TranslateRequest(BaseModel):
+    text: str
+    source_lang: str = "en"
+    target_lang: str = "es"
+
+class TranslateResponse(BaseModel):
+    transcribed_text: str
+    translated_text: str
+    source_language: str
+    target_language: str
+    success: bool
+
 # -----------------------------
 # Mock State for New Features
 # -----------------------------
@@ -316,6 +330,70 @@ def control_calibration(action: CalibrationStart):
                 "valid": True
             }
     return mock_calibration_state
+
+@app.post("/api/translate")
+def translate_text(body: TranslateRequest):
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(400, "Text is required")
+    if body.source_lang == body.target_lang:
+        return TranslateResponse(
+            transcribed_text=text,
+            translated_text=text,
+            source_language=body.source_lang,
+            target_language=body.target_lang,
+            success=True,
+        ).model_dump()
+
+    script_path = Path(__file__).resolve().parent.parent / "scripts" / "translation_bridge.py"
+    if not script_path.exists():
+        raise HTTPException(500, "Translation bridge script not found")
+
+    cmd = [
+        sys.executable,
+        str(script_path),
+        "--text",
+        text,
+        "--source",
+        body.source_lang,
+        "--target",
+        body.target_lang,
+        "--json",
+    ]
+    if os.environ.get("APM_OFFLINE") == "1":
+        cmd.append("--offline")
+
+    try:
+        completed = subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=45,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(504, "Translation timed out") from exc
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or "").strip()
+        detail = stderr.splitlines()[-1] if stderr else "Translation failed"
+        raise HTTPException(500, detail) from exc
+
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(500, "Translation output parsing failed") from exc
+
+    translated_text = str(payload.get("translated_text", "")).strip()
+    if not translated_text:
+        raise HTTPException(500, "Translation produced empty output")
+
+    return TranslateResponse(
+        transcribed_text=text,
+        translated_text=translated_text,
+        source_language=body.source_lang,
+        target_language=body.target_lang,
+        success=bool(payload.get("success", True)),
+    ).model_dump()
 
 @app.get("/api/peers")
 def list_peers(request: Request):

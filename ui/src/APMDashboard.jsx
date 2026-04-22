@@ -99,7 +99,9 @@ const APMDashboard = () => {
   });
   const [sourceLang, setSourceLang] = useState("en");
   const [targetLang, setTargetLang] = useState("es");
-  const [showSettings, setShowSettings] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [backendReady, setBackendReady] = useState(false);
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState("connected");
   const [toasts, setToasts] = useState([]);
   const [authPromptShown, setAuthPromptShown] = useState(false);
@@ -120,11 +122,47 @@ const APMDashboard = () => {
   const promptForApiKey = () => {
     if (authPromptShown || serverAuthEnabled) return;
     setAuthPromptShown(true);
-    setShowSettings(true);
+    setSettingsOpen(true);
     addToast(
       "API authentication is enabled. Enter the API key in Settings to continue.",
     );
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      while (!cancelled) {
+        try {
+          const res = await fetch("/health");
+          if (res.ok) {
+            setBackendReady(true);
+            return;
+          }
+        } catch (e) {
+          // Server is still waking up.
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    };
+    check();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!backendReady) return;
+    const timer = setTimeout(() => setShowLoadingOverlay(false), 500);
+    return () => clearTimeout(timer);
+  }, [backendReady]);
+
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === "Escape") setSettingsOpen(false);
+    };
+    if (settingsOpen) window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [settingsOpen]);
 
   // New V8.1.0 State
   const [metrics, setMetrics] = useState({
@@ -503,6 +541,28 @@ const APMDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-4 relative">
+      {showLoadingOverlay && (
+        <div
+          className={`fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center transition-opacity duration-500 ease-out ${backendReady ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+        >
+          <div className="text-center px-6">
+            <Radio
+              className="w-16 h-16 text-purple-300 mx-auto animate-spin"
+              style={{ animationDuration: "3s" }}
+            />
+            <p className="mt-6 text-2xl font-bold text-white">APM System v8.1</p>
+            <p className="mt-3 text-white/60 animate-pulse">Waking up server...</p>
+            <p className="mt-2 text-sm text-white/40">
+              Free tier instances sleep after inactivity. This takes about 30–60
+              seconds.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div
+        className={`transition-all duration-500 ${showLoadingOverlay ? "blur-sm pointer-events-none select-none" : ""}`}
+      >
       {/* Toasts container */}
       <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
         {toasts.map((toast) => (
@@ -573,7 +633,7 @@ const APMDashboard = () => {
             </div>
 
             <button
-              onClick={() => setShowSettings(!showSettings)}
+              onClick={() => setSettingsOpen(true)}
               className="p-2 hover:bg-white/10 rounded-lg transition-colors settings-toggle"
             >
               <Settings className="w-5 h-5" />
@@ -1039,196 +1099,220 @@ const APMDashboard = () => {
             </form>
           </div>
 
-          {/* Settings Panel */}
-          {showSettings && (
-            <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
-              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <Settings className="w-5 h-5 text-purple-400" />
-                Settings
-              </h2>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm text-gray-400 mb-2 block">
-                    API Key
-                  </label>
-                  {serverAuthEnabled ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-2">
-                      <Shield className="w-4 h-4 text-green-400 shrink-0" />
-                      <p className="text-xs text-green-300">
-                        Authentication is pre-configured by the server. No key
-                        required.
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <input
-                        type="password"
-                        value={apiKey}
-                        onChange={(e) => {
-                          setApiKey(e.target.value);
-                          localStorage.setItem("apm_api_key", e.target.value);
-                        }}
-                        placeholder="Enter API Key"
-                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
-                      />
-                      <p className="mt-2 text-xs text-gray-400">
-                        Use the same value configured as{" "}
-                        <code>APM_API_KEY</code> in Render environment settings.
-                      </p>
-                    </>
-                  )}
-                </div>
-
-                {/* Profiles & Calibration */}
-                <div className="pt-2 pb-4 border-b border-white/10">
-                  <div className="flex items-center justify-between mb-4">
-                    <label className="text-sm font-semibold text-gray-300">
-                      Active Profile
-                    </label>
-                    <button
-                      onClick={() => setShowCalibration(true)}
-                      className="text-xs bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 px-3 py-1 rounded-lg transition-colors border border-purple-500/30 run-calibration-btn"
-                    >
-                      Run Calibration
-                    </button>
-                  </div>
-                  <select
-                    value={activeProfile}
-                    onChange={(e) => setActiveProfile(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500 mb-2"
-                  >
-                    {profiles.map((p) => (
-                      <option key={p.name} value={p.name}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  {/* Real-time Metrics Mini-Display */}
-                  <div className="bg-black/40 rounded-lg p-3 mt-4 space-y-2 text-xs relative overflow-hidden">
-                    {metrics.offline && (
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 backdrop-blur-sm">
-                        <span className="text-red-400 font-semibold flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                          Telemetry Offline
-                        </span>
-                      </div>
-                    )}
-                    <div
-                      className={`transition-opacity ${metrics.offline ? "opacity-30" : "opacity-100"}`}
-                    >
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Peak Level</span>
-                        <span
-                          className={
-                            metrics.clipping
-                              ? "text-red-400 font-bold"
-                              : "text-green-400"
-                          }
-                        >
-                          {metrics.peak_db.toFixed(1)} dB{" "}
-                          {metrics.clipping && " (CLIP)"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between mt-2">
-                        <span className="text-gray-400">SNR</span>
-                        <span className="text-blue-400">
-                          {metrics.snr_db.toFixed(1)} dB
-                        </span>
-                      </div>
-                      <div className="flex justify-between mt-2">
-                        <span className="text-gray-400">Est. Latency</span>
-                        <span className="text-yellow-400">
-                          {metrics.latency_ms.toFixed(1)} ms
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm text-gray-400 mb-2 block">
-                    Source Language
-                  </label>
-                  <select
-                    value={sourceLang}
-                    onChange={(e) => setSourceLang(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
-                  >
-                    {languages.map((lang) => (
-                      <option key={lang.code} value={lang.code}>
-                        {lang.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-sm text-gray-400 mb-2 block">
-                    Target Language
-                  </label>
-                  <select
-                    value={targetLang}
-                    onChange={(e) => setTargetLang(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
-                  >
-                    {languages.map((lang) => (
-                      <option key={lang.code} value={lang.code}>
-                        {lang.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="pt-4 border-t border-white/10">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm">End-to-End Encryption</span>
-                    <button
-                      onClick={() => setEncryptionEnabled(!encryptionEnabled)}
-                      className={`relative w-12 h-6 rounded-full transition-colors ${
-                        encryptionEnabled ? "bg-green-500" : "bg-gray-600"
-                      }`}
-                    >
-                      <div
-                        className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                          encryptionEnabled ? "translate-x-6" : ""
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Real-time Translation</span>
-                    <button
-                      onClick={() => setTranslationEnabled(!translationEnabled)}
-                      className={`relative w-12 h-6 rounded-full transition-colors ${
-                        translationEnabled ? "bg-purple-500" : "bg-gray-600"
-                      }`}
-                    >
-                      <div
-                        className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                          translationEnabled ? "translate-x-6" : ""
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-white/10">
-                  <p className="text-xs text-gray-500">
-                    Local Participant: {localParticipant.name}
-                    <br />
-                    IP: {localParticipant.ip}
-                    <br />
-                    Port: 5060
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
+      </div>
+
+      {/* Settings Modal */}
+      {settingsOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 flex items-center justify-center"
+          onClick={() => setSettingsOpen(false)}
+        >
+          <div
+            className="bg-gray-900 border border-white/10 rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Settings className="w-5 h-5" /> Settings
+              </h2>
+              <button
+                onClick={() => setSettingsOpen(false)}
+                className="text-white/40 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm text-gray-400 mb-2 block">API Key</label>
+                {serverAuthEnabled ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-2">
+                    <Shield className="w-4 h-4 text-green-400 shrink-0" />
+                    <p className="text-xs text-green-300">
+                      Authentication is pre-configured by the server. No key
+                      required.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => {
+                        setApiKey(e.target.value);
+                        localStorage.setItem("apm_api_key", e.target.value);
+                      }}
+                      placeholder="Enter API Key"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
+                    />
+                    <p className="mt-2 text-xs text-gray-400">
+                      Use the same value configured as <code>APM_API_KEY</code>{" "}
+                      in Render environment settings.
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {/* Profiles & Calibration */}
+              <div className="pt-2 pb-4 border-b border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                  <label className="text-sm font-semibold text-gray-300">
+                    Active Profile
+                  </label>
+                  <button
+                    onClick={() => setShowCalibration(true)}
+                    className="text-xs bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 px-3 py-1 rounded-lg transition-colors border border-purple-500/30 run-calibration-btn"
+                  >
+                    Run Calibration
+                  </button>
+                </div>
+                <select
+                  value={activeProfile}
+                  onChange={(e) => setActiveProfile(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500 mb-2"
+                >
+                  {profiles.map((p) => (
+                    <option key={p.name} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Real-time Metrics Mini-Display */}
+                <div className="bg-black/40 rounded-lg p-3 mt-4 space-y-2 text-xs relative overflow-hidden">
+                  {metrics.offline && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 backdrop-blur-sm">
+                      <span className="text-red-400 font-semibold flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                        Telemetry Offline
+                      </span>
+                    </div>
+                  )}
+                  <div
+                    className={`transition-opacity ${metrics.offline ? "opacity-30" : "opacity-100"}`}
+                  >
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Peak Level</span>
+                      <span
+                        className={
+                          metrics.clipping
+                            ? "text-red-400 font-bold"
+                            : "text-green-400"
+                        }
+                      >
+                        {metrics.peak_db.toFixed(1)} dB{" "}
+                        {metrics.clipping && " (CLIP)"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between mt-2">
+                      <span className="text-gray-400">SNR</span>
+                      <span className="text-blue-400">
+                        {metrics.snr_db.toFixed(1)} dB
+                      </span>
+                    </div>
+                    <div className="flex justify-between mt-2">
+                      <span className="text-gray-400">Est. Latency</span>
+                      <span className="text-yellow-400">
+                        {metrics.latency_ms.toFixed(1)} ms
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-400 mb-2 block">
+                  Source Language
+                </label>
+                <select
+                  value={sourceLang}
+                  onChange={(e) => setSourceLang(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
+                >
+                  {languages.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-400 mb-2 block">
+                  Target Language
+                </label>
+                <select
+                  value={targetLang}
+                  onChange={(e) => setTargetLang(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
+                >
+                  {languages.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="pt-4 border-t border-white/10">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm">End-to-End Encryption</span>
+                  <button
+                    onClick={() => setEncryptionEnabled(!encryptionEnabled)}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                      encryptionEnabled ? "bg-green-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                        encryptionEnabled ? "translate-x-6" : ""
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Real-time Translation</span>
+                  <button
+                    onClick={() => setTranslationEnabled(!translationEnabled)}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                      translationEnabled ? "bg-purple-500" : "bg-gray-600"
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                        translationEnabled ? "translate-x-6" : ""
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/10">
+                <p className="text-xs text-gray-500">
+                  Local Participant: {localParticipant.name}
+                  <br />
+                  IP: {localParticipant.ip}
+                  <br />
+                  Port: 5060
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-white/10">
+              <button
+                onClick={() => setSettingsOpen(false)}
+                className="w-full py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         .custom-scrollbar::-webkit-scrollbar {

@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import { WSSignalingClient } from "./adapters/wsSignalingClient";
 
+const SIGNALING_LOBBY_ROOM = "apm-lobby";
+
 const formatDuration = (start) => {
   if (!start) return "00:00";
   const elapsed = Date.now() - start;
@@ -132,6 +134,7 @@ const APMDashboard = () => {
   const remoteStreamRef = useRef(new MediaStream());
   const remoteAudioRef = useRef(null);
   const pendingOfferRef = useRef(null);
+  const signalingRoomRef = useRef(null);
   const [incomingSessionId, setIncomingSessionId] = useState(null);
   const [remoteAudioConnected, setRemoteAudioConnected] = useState(false);
 
@@ -238,8 +241,13 @@ const APMDashboard = () => {
   };
 
   // Signaling setup
-  const ensureSignaling = (activeSessionId) => {
-    if (signalingRef.current) return;
+  const ensureSignaling = (roomId = SIGNALING_LOBBY_ROOM) => {
+    if (signalingRef.current && signalingRoomRef.current === roomId) return;
+
+    if (signalingRef.current) {
+      signalingRef.current.disconnect();
+      signalingRef.current = null;
+    }
 
     const s = new WSSignalingClient();
 
@@ -261,7 +269,9 @@ const APMDashboard = () => {
     });
 
     s.on("call", (msg) => {
+      if (msg.toPeerId && msg.toPeerId !== peerIdRef.current) return;
       appendLog("Incoming call signal");
+      remotePeerIdRef.current = msg.fromPeerId || remotePeerIdRef.current;
       setIncomingSessionId(msg.sessionId);
       dispatch({ type: "SET_CALL_STATE", payload: "ringing" });
       dispatch({
@@ -285,7 +295,9 @@ const APMDashboard = () => {
     });
 
     s.on("offer", (msg) => {
+      if (msg.toPeerId && msg.toPeerId !== peerIdRef.current) return;
       appendLog("Offer received");
+      remotePeerIdRef.current = msg.fromPeerId || remotePeerIdRef.current;
       pendingOfferRef.current = msg;
       setIncomingSessionId(msg.sessionId);
       if (state.callState !== "connected") {
@@ -294,6 +306,7 @@ const APMDashboard = () => {
     });
 
     s.on("answer", async (msg) => {
+      if (msg.toPeerId && msg.toPeerId !== peerIdRef.current) return;
       appendLog("Answer received");
       try {
         const pc = pcRef.current;
@@ -306,6 +319,7 @@ const APMDashboard = () => {
     });
 
     s.on("ice", async (msg) => {
+      if (msg.toPeerId && msg.toPeerId !== peerIdRef.current) return;
       try {
         const pc = pcRef.current;
         if (!pc) return;
@@ -322,9 +336,10 @@ const APMDashboard = () => {
     });
 
     signalingRef.current = s;
+    signalingRoomRef.current = roomId;
 
     s.connect({
-      roomId: activeSessionId,
+      roomId,
       peerId: peerIdRef.current,
     });
   };
@@ -349,11 +364,12 @@ const APMDashboard = () => {
 
     try {
       await startAudio();
-      ensureSignaling(newSessionId);
+      ensureSignaling();
 
       signalingRef.current.send({
         type: "call",
         sessionId: newSessionId,
+        toPeerId: peer.id,
       });
 
       const pc = createPeerConnection(newSessionId);
@@ -372,6 +388,7 @@ const APMDashboard = () => {
         type: "offer",
         sessionId: newSessionId,
         sdp: pc.localDescription,
+        toPeerId: peer.id,
       });
 
       appendLog("Offer sent");
@@ -394,7 +411,7 @@ const APMDashboard = () => {
 
     try {
       await startAudio();
-      ensureSignaling(sid);
+      ensureSignaling();
 
       const offerMsg = pendingOfferRef.current;
       if (!offerMsg || !offerMsg.sdp) {
@@ -417,11 +434,13 @@ const APMDashboard = () => {
         type: "answer",
         sessionId: sid,
         sdp: pc.localDescription,
+        toPeerId: remotePeerIdRef.current || undefined,
       });
 
       signalingRef.current.send({
         type: "accept",
         sessionId: sid,
+        toPeerId: remotePeerIdRef.current || undefined,
       });
 
       appendLog("Answer sent");
@@ -462,6 +481,7 @@ const APMDashboard = () => {
       signalingRef.current.send({
         type: "end",
         sessionId: state.activeSession.id,
+        toPeerId: remotePeerIdRef.current || undefined,
       });
     }
 
@@ -491,6 +511,7 @@ const APMDashboard = () => {
 
     signalingRef.current?.disconnect();
     signalingRef.current = null;
+    signalingRoomRef.current = null;
 
     stopAudio();
 
@@ -501,6 +522,7 @@ const APMDashboard = () => {
     dispatch({ type: "SET_CALL_STATE", payload: "idle" });
     dispatch({ type: "CLEAR_TRANSLATIONS" });
     appendLog("Cleanup complete");
+    ensureSignaling();
   };
 
   // Audio level simulation
@@ -517,6 +539,8 @@ const APMDashboard = () => {
 
   // Mock peers
   useEffect(() => {
+    ensureSignaling();
+
     const mockPeers = [
       { id: "peer1", name: "Alice Cooper", ip: "192.168.1.101", status: "online", role: "Field Ops" },
       { id: "peer2", name: "Bob Martinez", ip: "192.168.1.102", status: "online", role: "Command" },

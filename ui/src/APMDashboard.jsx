@@ -53,6 +53,9 @@ const apiFetch = (path, options = {}) => {
 };
 
 const parseApiError = async (res, fallback = "Request failed") => {
+  if (res.status === 401) {
+    return "Unauthorized. Open Settings and enter the API key that matches your Render APM_API_KEY value.";
+  }
   try {
     const data = await res.json();
     if (typeof data?.detail === "string" && data.detail.trim()) return data.detail;
@@ -99,6 +102,7 @@ const APMDashboard = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState("connected");
   const [toasts, setToasts] = useState([]);
+  const [authPromptShown, setAuthPromptShown] = useState(false);
   const [apiKey, setApiKey] = useState(
     localStorage.getItem("apm_api_key") || "",
   );
@@ -110,6 +114,15 @@ const APMDashboard = () => {
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3000);
+  };
+
+  const promptForApiKey = () => {
+    if (authPromptShown) return;
+    setAuthPromptShown(true);
+    setShowSettings(true);
+    addToast(
+      "API authentication is enabled. Enter the API key in Settings to continue.",
+    );
   };
 
   // New V8.1.0 State
@@ -138,6 +151,8 @@ const APMDashboard = () => {
           const data = await res.json();
           setOnlineStatus(data.status);
           setLocalParticipant((prev) => ({ ...prev, id: data.peer_id }));
+        } else if (res.status === 401) {
+          promptForApiKey();
         }
       } catch (e) {}
     };
@@ -1037,6 +1052,10 @@ const APMDashboard = () => {
                     placeholder="Enter API Key"
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
                   />
+                  <p className="mt-2 text-xs text-gray-400">
+                    Use the same value configured as <code>APM_API_KEY</code> in
+                    Render environment settings.
+                  </p>
                 </div>
 
                 {/* Profiles & Calibration */}

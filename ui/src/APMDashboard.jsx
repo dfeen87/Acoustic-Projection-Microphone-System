@@ -376,13 +376,38 @@ const APMDashboard = () => {
     if (!text) return;
 
     let translatedText = text;
+    const source = sourceLang?.trim()?.toLowerCase() || "en";
+    const target = targetLang?.trim()?.toLowerCase() || "es";
+
+    if (source !== target) {
+      try {
+        const response = await apiFetch("/api/translate", {
+          method: "POST",
+          body: JSON.stringify({
+            text,
+            source_lang: source,
+            target_lang: target,
+          }),
+        });
+
+        if (response.ok) {
+          const payload = await response.json();
+          if (typeof payload?.translated_text === "string" && payload.translated_text.trim()) {
+            translatedText = payload.translated_text.trim();
+          }
+        }
+      } catch (_) {
+        // Fall through to optional in-browser bridge below.
+      }
+    }
+
     const bridgeTranslator = globalThis?.APMTranslationBridge?.translate;
-    if (typeof bridgeTranslator === "function") {
+    if (translatedText === text && source !== target && typeof bridgeTranslator === "function") {
       try {
         const result = await bridgeTranslator({
           text,
-          sourceLang,
-          targetLang,
+          sourceLang: source,
+          targetLang: target,
         });
         if (typeof result === "string" && result.trim()) {
           translatedText = result.trim();

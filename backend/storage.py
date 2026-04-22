@@ -180,12 +180,18 @@ class Storage:
         else:
             self.ensure_local_peer()
 
-    def create_session(self, peer_id: str) -> Dict[str, object]:
+    def create_session(
+        self,
+        peer_id: str,
+        *,
+        status: str = "calling",
+        session_id: Optional[str] = None,
+    ) -> Dict[str, object]:
         now = time.time()
         session = {
-            "id": "session-" + uuid.uuid4().hex[:10],
+            "id": session_id or ("session-" + uuid.uuid4().hex[:10]),
             "peer_id": peer_id,
-            "status": "calling",
+            "status": status,
             "created_at": now,
             "updated_at": now,
         }

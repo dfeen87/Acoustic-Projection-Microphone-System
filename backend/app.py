@@ -1,10 +1,13 @@
 import asyncio
+import json
 import os
 import secrets
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
@@ -158,6 +161,13 @@ class Session(BaseModel):
     status: str  # "calling" | "ringing" | "connected" | "ended" | "timeout"
     created_at: float
     updated_at: float
+
+
+class IncomingSessionCreate(BaseModel):
+    session_id: str
+    caller_peer_id: str
+    caller_name: str
+    caller_ip: str
 
 class ProfileCreate(BaseModel):
     name: str
@@ -336,9 +346,40 @@ def peer_details(peer_id: str):
 @app.post("/api/session")
 def create_session(peer_id: str):
     storage: Storage = app.state.storage
-    if not storage.get_peer(peer_id):
+    peer = storage.get_peer(peer_id)
+    if not peer:
         raise HTTPException(404, "Peer not found")
     session = storage.create_session(peer_id)
+    local_peer_id = app.state.local_peer_id
+    local_peer = storage.get_peer(local_peer_id)
+
+    # Best-effort cross-instance signaling: notify the remote peer backend
+    # by IP so it can create a matching incoming session for its local user.
+    if local_peer:
+        notify_payload = {
+            "session_id": session["id"],
+            "caller_peer_id": local_peer["id"],
+            "caller_name": local_peer["name"],
+            "caller_ip": local_peer["ip"],
+        }
+        target_url = f"http://{peer['ip']}:8080/api/session/incoming"
+        headers = {"Content-Type": "application/json"}
+        if _API_KEY:
+            headers["X-APM-API-Key"] = _API_KEY
+        req = urllib_request.Request(
+            target_url,
+            data=json.dumps(notify_payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        try:
+            with urllib_request.urlopen(req, timeout=2):
+                pass
+        except (urllib_error.URLError, TimeoutError):
+            # Keep local UX functional even when the remote instance
+            # is unavailable. Caller side can still timeout gracefully.
+            pass
+
     return {"session": Session(**session).model_dump()}
 
 @app.get("/api/session/incoming")
@@ -353,6 +394,31 @@ def get_incoming_session():
         storage.update_session_status(session["id"], "ringing", now)
         session["status"] = "ringing"
         session["updated_at"] = now
+    return {"session": Session(**session).model_dump()}
+
+@app.post("/api/session/incoming")
+def register_incoming_session(body: IncomingSessionCreate):
+    storage: Storage = app.state.storage
+    local_id = app.state.local_peer_id
+    existing = storage.get_session(body.session_id)
+    if existing:
+        return {"session": Session(**existing).model_dump()}
+
+    remote_peer = storage.get_peer(body.caller_peer_id)
+    now = time.time()
+    if not remote_peer:
+        storage.upsert_peer(
+            {
+                "id": body.caller_peer_id,
+                "name": body.caller_name,
+                "ip": body.caller_ip,
+                "status": "online",
+                "last_seen": now,
+            }
+        )
+    session = storage.create_session(
+        local_id, status="ringing", session_id=body.session_id
+    )
     return {"session": Session(**session).model_dump()}
 
 

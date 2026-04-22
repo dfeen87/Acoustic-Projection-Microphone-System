@@ -2,6 +2,9 @@ import asyncio
 import json
 import os
 import secrets
+import subprocess
+import sys
+import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -218,6 +221,26 @@ class ProfileCreate(BaseModel):
 class CalibrationStart(BaseModel):
     action: Literal["start", "cancel", "advance"]
 
+class TranslateRequest(BaseModel):
+    text: str
+    source_lang: str = "en"
+    target_lang: str = "es"
+
+class TranslateResponse(BaseModel):
+    transcribed_text: str
+    translated_text: str
+    source_language: str
+    target_language: str
+    success: bool
+
+class SessionTranslationCreate(BaseModel):
+    sender_peer_id: str
+    source_language: str
+    target_language: str
+    original_text: str
+    translated_text: str
+    timestamp_ms: float | None = None
+
 # -----------------------------
 # Mock State for New Features
 # -----------------------------
@@ -248,6 +271,9 @@ mock_calibration_state = {
     "progress": 0.0,
     "result": None
 }
+
+session_translations: dict[str, list[dict[str, object]]] = {}
+session_translations_lock = threading.Lock()
 
 # -----------------------------
 # Endpoints your system expects
@@ -316,6 +342,111 @@ def control_calibration(action: CalibrationStart):
                 "valid": True
             }
     return mock_calibration_state
+
+@app.post("/api/translate")
+def translate_text(body: TranslateRequest):
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(400, "Text is required")
+    if body.source_lang == body.target_lang:
+        return TranslateResponse(
+            transcribed_text=text,
+            translated_text=text,
+            source_language=body.source_lang,
+            target_language=body.target_lang,
+            success=True,
+        ).model_dump()
+
+    script_path = Path(__file__).resolve().parent.parent / "scripts" / "translation_bridge.py"
+    if not script_path.exists():
+        raise HTTPException(500, "Translation bridge script not found")
+
+    cmd = [
+        sys.executable,
+        str(script_path),
+        "--text",
+        text,
+        "--source",
+        body.source_lang,
+        "--target",
+        body.target_lang,
+        "--json",
+    ]
+    if os.environ.get("APM_OFFLINE") == "1":
+        cmd.append("--offline")
+
+    try:
+        completed = subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=45,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(504, "Translation timed out") from exc
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or "").strip()
+        detail = stderr.splitlines()[-1] if stderr else "Translation failed"
+        raise HTTPException(500, detail) from exc
+
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(500, "Translation output parsing failed") from exc
+
+    translated_text = str(payload.get("translated_text", "")).strip()
+    if not translated_text:
+        raise HTTPException(500, "Translation produced empty output")
+
+    return TranslateResponse(
+        transcribed_text=text,
+        translated_text=translated_text,
+        source_language=body.source_lang,
+        target_language=body.target_lang,
+        success=bool(payload.get("success", True)),
+    ).model_dump()
+
+@app.post("/api/session/{session_id}/translation")
+def publish_session_translation(session_id: str, body: SessionTranslationCreate):
+    storage: Storage = app.state.storage
+    if not storage.get_session(session_id):
+        raise HTTPException(404, "Session not found")
+
+    original_text = body.original_text.strip()
+    translated_text = body.translated_text.strip()
+    if not original_text or not translated_text:
+        raise HTTPException(400, "Both original_text and translated_text are required")
+
+    message = {
+        "session_id": session_id,
+        "sender_peer_id": body.sender_peer_id,
+        "source_language": body.source_language,
+        "target_language": body.target_language,
+        "original_text": original_text,
+        "translated_text": translated_text,
+        "timestamp_ms": body.timestamp_ms or (time.time() * 1000.0),
+    }
+
+    with session_translations_lock:
+        messages = session_translations.setdefault(session_id, [])
+        messages.append(message)
+        if len(messages) > 200:
+            del messages[:-200]
+
+    return {"ok": True}
+
+@app.get("/api/session/{session_id}/translations")
+def get_session_translations(session_id: str, since_ms: float = 0):
+    storage: Storage = app.state.storage
+    if not storage.get_session(session_id):
+        raise HTTPException(404, "Session not found")
+
+    with session_translations_lock:
+        messages = list(session_translations.get(session_id, []))
+
+    filtered = [msg for msg in messages if float(msg.get("timestamp_ms", 0)) > since_ms]
+    return {"translations": filtered}
 
 @app.get("/api/peers")
 def list_peers(request: Request):
@@ -489,6 +620,8 @@ def end_session(session_id: str):
     storage.update_session_status(session_id, "ended", now)
     session["status"] = "ended"
     session["updated_at"] = now
+    with session_translations_lock:
+        session_translations.pop(session_id, None)
     return {"ok": True, "session": Session(**session).model_dump()}
 
 

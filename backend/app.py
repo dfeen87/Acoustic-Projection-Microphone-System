@@ -71,7 +71,7 @@ async def lifespan(app: FastAPI):
     await telemetry_client.stop()
 
 
-app = FastAPI(title="APM FastAPI Backend", version="7.0.0", lifespan=lifespan)
+app = FastAPI(title="APM FastAPI Backend", version="8.1.0", lifespan=lifespan)
 
 _CORS_ORIGINS_ENV = os.environ.get("APM_CORS_ORIGINS", "")
 _CORS_ORIGINS = [origin.strip() for origin in _CORS_ORIGINS_ENV.split(",") if origin.strip()]
@@ -103,6 +103,10 @@ async def api_key_middleware(request: Request, call_next) -> Response:
 # -----------------------------
 class StatusUpdate(BaseModel):
     status: Literal["online", "away", "busy"]
+
+class PeerCreate(BaseModel):
+    name: str
+    ip: str
 
 class Peer(BaseModel):
     id: str
@@ -229,6 +233,27 @@ def list_peers():
             }
         )
     return {"peers": peers_out}
+
+@app.post("/api/peers")
+def add_peer(body: PeerCreate):
+    storage: Storage = app.state.storage
+    peer = storage.add_peer(body.name, body.ip)
+    return {"ok": True, "peer": peer}
+
+@app.delete("/api/peers/{peer_id}")
+def remove_peer(peer_id: str):
+    storage: Storage = app.state.storage
+    if not storage.get_peer(peer_id):
+        raise HTTPException(404, "Peer not found")
+    storage.delete_peer(peer_id)
+    return {"ok": True}
+
+@app.get("/api/status")
+def get_status():
+    storage: Storage = app.state.storage
+    local_id = app.state.local_peer_id
+    peer = storage.get_peer(local_id)
+    return {"status": peer["status"], "peer_id": local_id}
 
 @app.post("/api/status")
 def update_status(body: StatusUpdate):

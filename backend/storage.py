@@ -85,6 +85,23 @@ class Storage:
             ).fetchone()
             return dict(row) if row else None
 
+    def add_peer(self, name: str, ip: str) -> Dict[str, object]:
+        peer = {
+            "id": "peer-" + uuid.uuid4().hex[:6],
+            "name": name,
+            "ip": ip,
+            "status": "online",
+            "last_seen": time.time()
+        }
+        self.upsert_peer(peer)
+        return peer
+
+    def delete_peer(self, peer_id: str) -> None:
+        with self._db_lock:
+            with self._connect() as conn:
+                conn.execute("DELETE FROM peers WHERE id = ?", (peer_id,))
+                conn.commit()
+
     def upsert_peer(self, peer: Dict[str, object]) -> None:
         with self._db_lock:  # Protect write operation
             with self._connect() as conn:

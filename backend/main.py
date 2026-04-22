@@ -24,6 +24,7 @@ Endpoints:
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -41,6 +42,22 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _resolve_default_port() -> int:
+    for env_key in ("PORT", "APM_API_PORT"):
+        raw_value = os.environ.get(env_key)
+        if not raw_value:
+            continue
+        try:
+            port = int(raw_value)
+        except ValueError:
+            logger.warning("Ignoring invalid %s value: %s", env_key, raw_value)
+            continue
+        if 1 <= port <= 65535:
+            return port
+        logger.warning("Ignoring out-of-range %s value: %s", env_key, raw_value)
+    return 8080
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='APM REST API Server - Global Node Access',
@@ -55,8 +72,8 @@ def main():
     parser.add_argument(
         '--port',
         type=int,
-        default=8080,
-        help='Port to bind to (default: 8080)'
+        default=_resolve_default_port(),
+        help='Port to bind to (default: PORT env var, else APM_API_PORT env var, else 8080)'
     )
     parser.add_argument(
         '--reload',
@@ -84,22 +101,20 @@ def main():
     logger.info("=" * 60)
     logger.info("APM REST API Server - Starting")
     logger.info("=" * 60)
-    logger.info(f"Host: {args.host}")
+    bind_host = "0.0.0.0"
+    logger.info(f"Host: {bind_host}")
     logger.info(f"Port: {args.port}")
     logger.info(f"Reload: {args.reload}")
     logger.info(f"Log Level: {args.log_level}")
     
-    if args.host == '0.0.0.0':
-        logger.info("🌐 Global node access enabled - API accessible from network")
-    else:
-        logger.info(f"🔒 API accessible only from {args.host}")
+    logger.info("🌐 Global node access enabled - API accessible from network")
     
     logger.info("=" * 60)
     logger.info("")
     logger.info("Available endpoints:")
-    logger.info(f"  http://{args.host if args.host != '0.0.0.0' else '<your-ip>'}:{args.port}/health")
-    logger.info(f"  http://{args.host if args.host != '0.0.0.0' else '<your-ip>'}:{args.port}/api/peers")
-    logger.info(f"  http://{args.host if args.host != '0.0.0.0' else '<your-ip>'}:{args.port}/docs (API docs)")
+    logger.info(f"  http://<your-ip>:{args.port}/health")
+    logger.info(f"  http://<your-ip>:{args.port}/api/peers")
+    logger.info(f"  http://<your-ip>:{args.port}/docs (API docs)")
     logger.info("")
     
     try:
@@ -107,7 +122,7 @@ def main():
         backend_app.app.state.telemetry_client = TelemetryClient()
         uvicorn.run(
             "backend.app:app",
-            host=args.host,
+            host=bind_host,
             port=args.port,
             reload=args.reload,
             log_level=args.log_level.lower(),

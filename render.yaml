@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: apms
+    runtime: python
+    buildCommand: |
+      pip install -r backend/requirements.txt &&
+      cd ui && npm ci && npm run build
+    startCommand: uvicorn backend.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: APM_API_PORT
+        value: $PORT
+      - key: APM_API_KEY
+        sync: false
+      - key: APM_CORS_ORIGINS
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: NODE_VERSION
+        value: "20"

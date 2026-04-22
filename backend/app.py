@@ -2,10 +2,13 @@ import asyncio
 import os
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.storage import Storage
@@ -68,10 +71,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="APM FastAPI Backend", version="7.0.0", lifespan=lifespan)
 
-# If you use Vite proxy, CORS is less critical, but keep it anyway.
+_CORS_ORIGINS_ENV = os.environ.get("APM_CORS_ORIGINS", "")
+_CORS_ORIGINS = [origin.strip() for origin in _CORS_ORIGINS_ENV.split(",") if origin.strip()]
+if not _CORS_ORIGINS:
+    _CORS_ORIGINS = ["http://localhost:5173"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "X-APM-API-Key"],
@@ -287,3 +294,19 @@ def end_session(session_id: str):
     session["status"] = "ended"
     session["updated_at"] = now
     return {"ok": True, "session": Session(**session).model_dump()}
+
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_UI_DIST_DIR = _PROJECT_ROOT / "ui" / "dist"
+_UI_ASSETS_DIR = _UI_DIST_DIR / "assets"
+app.mount("/assets", StaticFiles(directory=_UI_ASSETS_DIR, check_dir=False), name="assets")
+
+
+@app.get("/{full_path:path}")
+def serve_frontend(full_path: str):
+    if full_path.startswith(("api", "health")):
+        raise HTTPException(status_code=404, detail="Not Found")
+    index_path = _UI_DIST_DIR / "index.html"
+    if not index_path.is_file():
+        raise HTTPException(status_code=404, detail="Frontend build not found")
+    return FileResponse(index_path)

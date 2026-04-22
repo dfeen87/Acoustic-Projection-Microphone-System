@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Phone,
   PhoneOff,
@@ -50,6 +50,21 @@ const apiFetch = (path, options = {}) => {
   }
 
   return fetch(url, { ...options, headers, credentials: "include" });
+};
+
+const localeByLang = {
+  ar: "ar-SA",
+  de: "de-DE",
+  en: "en-US",
+  es: "es-ES",
+  fr: "fr-FR",
+  hi: "hi-IN",
+  it: "it-IT",
+  ja: "ja-JP",
+  ko: "ko-KR",
+  pt: "pt-PT",
+  ru: "ru-RU",
+  zh: "zh-CN",
 };
 
 const parseApiError = async (res, fallback = "Request failed") => {
@@ -123,6 +138,20 @@ const APMDashboard = () => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3000);
   };
+
+  const speakTranslation = useCallback(
+    (text, langCode) => {
+      if (!text || speakerMuted || !("speechSynthesis" in window)) return;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang =
+        localeByLang[langCode?.toLowerCase?.()] ||
+        langCode ||
+        localeByLang[targetLang] ||
+        "en-US";
+      window.speechSynthesis.speak(utterance);
+    },
+    [speakerMuted, targetLang],
+  );
 
   const promptForApiKey = () => {
     if (authPromptShown || serverAuthEnabled) return;
@@ -430,6 +459,8 @@ const APMDashboard = () => {
       },
     ]);
 
+    speakTranslation(translatedText, target);
+
     if (activeSession?.id && translatedText) {
       try {
         await apiFetch(`/api/session/${activeSession.id}/translation`, {
@@ -473,21 +504,6 @@ const APMDashboard = () => {
       }
       return undefined;
     }
-
-    const localeByLang = {
-      ar: "ar-SA",
-      de: "de-DE",
-      en: "en-US",
-      es: "es-ES",
-      fr: "fr-FR",
-      hi: "hi-IN",
-      it: "it-IT",
-      ja: "ja-JP",
-      ko: "ko-KR",
-      pt: "pt-PT",
-      ru: "ru-RU",
-      zh: "zh-CN",
-    };
 
     shouldRunRecognitionRef.current = true;
     const recognition = new SpeechRecognition();
@@ -580,13 +596,7 @@ const APMDashboard = () => {
 
         if (remoteEntries.length > 0) {
           setTranslations((prev) => [...prev, ...remoteEntries].slice(-10));
-          if (!speakerMuted && "speechSynthesis" in window) {
-            remoteEntries.forEach((entry) => {
-              const utterance = new SpeechSynthesisUtterance(entry.trans);
-              utterance.lang = entry.lang || targetLang;
-              window.speechSynthesis.speak(utterance);
-            });
-          }
+          remoteEntries.forEach((entry) => speakTranslation(entry.trans, entry.lang));
         }
       } catch (_) {
         // Non-fatal polling errors.
@@ -596,7 +606,7 @@ const APMDashboard = () => {
     pollIncomingTranslations();
     const interval = setInterval(pollIncomingTranslations, 900);
     return () => clearInterval(interval);
-  }, [activeSession?.id, callState, localParticipant.id, speakerMuted, targetLang, translationEnabled]);
+  }, [activeSession?.id, callState, localParticipant.id, speakTranslation, translationEnabled]);
 
   const initiateCall = async (peer) => {
     setCallState("calling");
@@ -1110,8 +1120,11 @@ const APMDashboard = () => {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold flex items-center gap-2">
                   <Globe className="w-5 h-5 text-purple-400" />
-                  Real-time Translation
+                  Live Call Translation
                 </h2>
+                <p className="text-xs text-gray-400">
+                  Transcript capture + spoken translated audio output
+                </p>
                 <div className="flex gap-2 text-sm">
                   <span className="px-3 py-1 bg-purple-500/20 rounded-lg">
                     {sourceLang.toUpperCase()}
@@ -1126,19 +1139,25 @@ const APMDashboard = () => {
               <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar">
                 {translations.length === 0 ? (
                   <p className="text-center text-gray-500 py-8">
-                    Waiting for speech...
+                    Listening for live call speech...
                   </p>
                 ) : (
                   translations.map((trans, idx) => (
                     <div
                       key={idx}
-                      className={`p-4 rounded-xl ${
+                      className={`p-4 rounded-xl border ${
                         trans.from === "local"
-                          ? "bg-purple-500/20 ml-8"
-                          : "bg-white/5 mr-8"
+                          ? "bg-purple-500/20 border-purple-500/30"
+                          : "bg-white/5 border-white/10"
                       }`}
                     >
+                      <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">
+                        {trans.from === "local" ? "You said" : "Peer said"}
+                      </p>
                       <p className="text-sm text-gray-400 mb-1">{trans.orig}</p>
+                      <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">
+                        Spoken translation
+                      </p>
                       <p className="text-base">{trans.trans}</p>
                     </div>
                   ))

@@ -341,6 +341,21 @@ def create_session(peer_id: str):
     session = storage.create_session(peer_id)
     return {"session": Session(**session).model_dump()}
 
+@app.get("/api/session/incoming")
+def get_incoming_session():
+    storage: Storage = app.state.storage
+    local_id = app.state.local_peer_id
+    session = storage.get_latest_session_for_peer(local_id, ["calling", "ringing"])
+    if not session:
+        return {"session": None}
+    if session["status"] == "calling":
+        now = time.time()
+        storage.update_session_status(session["id"], "ringing", now)
+        session["status"] = "ringing"
+        session["updated_at"] = now
+    return {"session": Session(**session).model_dump()}
+
+
 @app.get("/api/session/{session_id}")
 def get_session(session_id: str):
     storage: Storage = app.state.storage

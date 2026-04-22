@@ -214,6 +214,25 @@ class Storage:
             ).fetchone()
             return dict(row) if row else None
 
+    def get_latest_session_for_peer(
+        self, peer_id: str, statuses: List[str]
+    ) -> Optional[Dict[str, object]]:
+        if not statuses:
+            return None
+        placeholders = ",".join("?" for _ in statuses)
+        with self._connect() as conn:
+            row = conn.execute(
+                f"""
+                SELECT *
+                FROM sessions
+                WHERE peer_id = ? AND status IN ({placeholders})
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """,
+                (peer_id, *statuses),
+            ).fetchone()
+            return dict(row) if row else None
+
     def update_session_status(self, session_id: str, status: str, updated_at: float) -> None:
         with self._db_lock:  # Protect write operation
             with self._connect() as conn:

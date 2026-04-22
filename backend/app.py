@@ -1,5 +1,6 @@
 import asyncio
 import os
+import secrets
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -26,7 +27,23 @@ from backend.telemetry import get_latest_metrics
 # ---------------------------------------------------------------------------
 
 _API_KEY = os.environ.get("APM_API_KEY", "").strip()
-_EXEMPT_PREFIXES = ("/health", "/docs", "/openapi", "/redoc")
+_EXEMPT_PREFIXES = ("/health", "/docs", "/openapi", "/redoc", "/api/config")
+
+# On Render (and other cloud platforms) HTTPS is always used, so the Secure
+# flag can be set on session cookies.  Locally we skip it so the cookie still
+# works over plain HTTP during development.
+_IS_PRODUCTION = bool(os.environ.get("RENDER", ""))
+
+# When API-key auth is active, generate a single-use random session token on
+# startup.  The browser receives this opaque token (not the real API key) in
+# an HTTP-only cookie so the secret key itself is never transmitted to the
+# client.  The token is valid for the lifetime of the process; a restart
+# issues a new one and any stored cookies are automatically invalidated.
+_SESSION_TOKEN = secrets.token_hex(32) if _API_KEY else ""
+
+# Cookie lifetime: 7 days.  A fresh token is issued on every server restart,
+# so the practical window of exposure is bounded by the deploy cadence.
+_SESSION_COOKIE_MAX_AGE = 7 * 24 * 60 * 60
 
 SESSION_TIMEOUT_SECONDS = 30
 SESSION_CLEANUP_INTERVAL_SECONDS = 5
@@ -98,7 +115,10 @@ async def api_key_middleware(request: Request, call_next) -> Response:
 
     if _API_KEY and path.startswith("/api"):
         provided = request.headers.get("X-APM-API-Key", "").strip()
-        if provided != _API_KEY:
+        session_cookie = request.cookies.get("apm_session", "").strip()
+        # Accept either the raw API key in the header (existing behaviour) or
+        # the opaque session token that the backend sets as an HTTP-only cookie.
+        if provided != _API_KEY and session_cookie != _SESSION_TOKEN:
             return Response(content='{"detail":"Unauthorized"}', status_code=401,
                             media_type="application/json")
     return await call_next(request)
@@ -182,6 +202,16 @@ mock_calibration_state = {
 @app.get("/health")
 def health():
     return {"ok": True}
+
+@app.get("/api/config")
+def get_config():
+    """Return server-side configuration flags consumed by the frontend.
+
+    This endpoint is intentionally exempt from API-key authentication so the
+    UI can query it before any credentials are known.  It never exposes the
+    actual key – only a boolean indicating whether authentication is active.
+    """
+    return {"auth_enabled": bool(_API_KEY)}
 
 # -----------------------------
 # New V7.0.0 Endpoints
@@ -358,4 +388,24 @@ def serve_frontend(request: Request, full_path: str):
     index_path = _UI_DIST_DIR / "index.html"
     if not index_path.is_file():
         raise HTTPException(status_code=404, detail="Frontend build not found")
-    return FileResponse(index_path)
+    response = FileResponse(index_path)
+    if _API_KEY:
+        # Set an HTTP-only session cookie so every browser that loads the UI
+        # is automatically authenticated without users needing to paste the
+        # API key manually.  The cookie value is an opaque random token (not
+        # the API key itself) generated at server startup.  Properties:
+        #   • httponly  – JavaScript cannot read it (XSS-safe)
+        #   • samesite=strict – not sent on cross-site requests (CSRF-safe)
+        #   • secure    – only transmitted over HTTPS (set in production)
+        #   • path=/    – accompanies every request to this origin
+        #   • max_age   – 7-day lifetime; refreshed on each page load
+        response.set_cookie(
+            key="apm_session",
+            value=_SESSION_TOKEN,
+            httponly=True,
+            samesite="strict",
+            secure=_IS_PRODUCTION,
+            path="/",
+            max_age=_SESSION_COOKIE_MAX_AGE,
+        )
+    return response

@@ -49,7 +49,7 @@ const apiFetch = (path, options = {}) => {
     headers["Content-Type"] = "application/json";
   }
 
-  return fetch(url, { ...options, headers });
+  return fetch(url, { ...options, headers, credentials: "include" });
 };
 
 const parseApiError = async (res, fallback = "Request failed") => {
@@ -106,6 +106,7 @@ const APMDashboard = () => {
   const [apiKey, setApiKey] = useState(
     localStorage.getItem("apm_api_key") || "",
   );
+  const [serverAuthEnabled, setServerAuthEnabled] = useState(false);
   const [onlineStatus, setOnlineStatus] = useState("online");
 
   const addToast = (message) => {
@@ -117,7 +118,7 @@ const APMDashboard = () => {
   };
 
   const promptForApiKey = () => {
-    if (authPromptShown) return;
+    if (authPromptShown || serverAuthEnabled) return;
     setAuthPromptShown(true);
     setShowSettings(true);
     addToast(
@@ -141,6 +142,15 @@ const APMDashboard = () => {
     progress: 0,
     result: null,
   });
+
+  // Fetch server config on mount to detect if auth is pre-configured via
+  // the server-managed session cookie (APM_API_KEY env var on the backend).
+  useEffect(() => {
+    fetch("/api/config", { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => setServerAuthEnabled(Boolean(data.auth_enabled)))
+      .catch((err) => console.error("Failed to fetch server config:", err));
+  }, []);
 
   // Fetch local peer status
   useEffect(() => {
@@ -1042,20 +1052,32 @@ const APMDashboard = () => {
                   <label className="text-sm text-gray-400 mb-2 block">
                     API Key
                   </label>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => {
-                      setApiKey(e.target.value);
-                      localStorage.setItem("apm_api_key", e.target.value);
-                    }}
-                    placeholder="Enter API Key"
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
-                  />
-                  <p className="mt-2 text-xs text-gray-400">
-                    Use the same value configured as <code>APM_API_KEY</code> in
-                    Render environment settings.
-                  </p>
+                  {serverAuthEnabled ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-2">
+                      <Shield className="w-4 h-4 text-green-400 shrink-0" />
+                      <p className="text-xs text-green-300">
+                        Authentication is pre-configured by the server. No key
+                        required.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        type="password"
+                        value={apiKey}
+                        onChange={(e) => {
+                          setApiKey(e.target.value);
+                          localStorage.setItem("apm_api_key", e.target.value);
+                        }}
+                        placeholder="Enter API Key"
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
+                      />
+                      <p className="mt-2 text-xs text-gray-400">
+                        Use the same value configured as{" "}
+                        <code>APM_API_KEY</code> in Render environment settings.
+                      </p>
+                    </>
+                  )}
                 </div>
 
                 {/* Profiles & Calibration */}

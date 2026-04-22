@@ -299,12 +299,12 @@ def end_session(session_id: str):
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _UI_DIST_DIR = _PROJECT_ROOT / "ui" / "dist"
 _UI_ASSETS_DIR = _UI_DIST_DIR / "assets"
-app.mount("/assets", StaticFiles(directory=_UI_ASSETS_DIR, check_dir=False), name="assets")
+app.mount("/assets", StaticFiles(directory=_UI_ASSETS_DIR), name="assets")
 
 
 @app.get("/{full_path:path}")
-def serve_frontend(full_path: str):
-    if full_path.startswith(("api", "health")):
+def serve_frontend(request: Request, full_path: str):
+    if request.url.path.startswith(("/api", "/health")):
         raise HTTPException(status_code=404, detail="Not Found")
     index_path = _UI_DIST_DIR / "index.html"
     if not index_path.is_file():

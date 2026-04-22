@@ -73,7 +73,7 @@ def main():
         '--port',
         type=int,
         default=_resolve_default_port(),
-        help='Port to bind to (default: $PORT, else $APM_API_PORT, else 8080)'
+        help='Port to bind to (default: PORT env var, else APM_API_PORT env var, else 8080)'
     )
     parser.add_argument(
         '--reload',

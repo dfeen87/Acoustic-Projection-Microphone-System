@@ -25,7 +25,7 @@ from backend.telemetry import get_latest_metrics
 # attach a Limiter instance to the app.
 # ---------------------------------------------------------------------------
 
-_API_KEY = os.environ.get("APM_API_KEY", "")
+_API_KEY = os.environ.get("APM_API_KEY", "").strip()
 _EXEMPT_PREFIXES = ("/health", "/docs", "/openapi", "/redoc")
 
 SESSION_TIMEOUT_SECONDS = 30
@@ -90,8 +90,14 @@ app.add_middleware(
 @app.middleware("http")
 async def api_key_middleware(request: Request, call_next) -> Response:
     """Validate X-APM-API-Key header for /api/* endpoints when APM_API_KEY is set."""
-    if _API_KEY and request.url.path.startswith("/api"):
-        provided = request.headers.get("X-APM-API-Key", "")
+    path = request.url.path
+
+    # Let CORS preflight and explicit exempt routes pass through untouched.
+    if request.method == "OPTIONS" or path.startswith(_EXEMPT_PREFIXES):
+        return await call_next(request)
+
+    if _API_KEY and path.startswith("/api"):
+        provided = request.headers.get("X-APM-API-Key", "").strip()
         if provided != _API_KEY:
             return Response(content='{"detail":"Unauthorized"}', status_code=401,
                             media_type="application/json")

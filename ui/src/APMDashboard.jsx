@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Phone,
   PhoneOff,
@@ -22,6 +22,16 @@ import {
 } from "lucide-react";
 
 const API_BASE = "";
+
+const isValidIPv4 = (ip) => {
+  const octets = ip.split(".");
+  if (octets.length !== 4) return false;
+  return octets.every((octet) => {
+    if (!/^\d{1,3}$/.test(octet)) return false;
+    const value = Number(octet);
+    return value >= 0 && value <= 255;
+  });
+};
 
 const apiFetch = (path, options = {}) => {
   const url = `${API_BASE}${path}`;
@@ -124,14 +134,22 @@ const APMDashboard = () => {
   }, []);
 
   const toggleOnlineStatus = async () => {
+    const previousStatus = onlineStatus;
     const newStatus = onlineStatus === "online" ? "away" : "online";
     setOnlineStatus(newStatus);
     try {
-      await apiFetch("/api/status", {
+      const res = await apiFetch("/api/status", {
         method: "POST",
         body: JSON.stringify({ status: newStatus }),
       });
-    } catch (e) {}
+      if (!res.ok) {
+        setOnlineStatus(previousStatus);
+        addToast("Failed to update status");
+      }
+    } catch (e) {
+      setOnlineStatus(previousStatus);
+      addToast("Failed to update status");
+    }
   };
 
   // Fetch diagnostics (1Hz)
@@ -246,8 +264,7 @@ const APMDashboard = () => {
 
   const handleAddPeer = async (e) => {
     e.preventDefault();
-    if (!newPeerName || !newPeerIp.match(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/))
-      return;
+    if (!newPeerName || !isValidIPv4(newPeerIp)) return;
     try {
       const res = await apiFetch("/api/peers", {
         method: "POST",
@@ -321,9 +338,13 @@ const APMDashboard = () => {
           startTime: Date.now(),
           encrypted: encryptionEnabled,
         });
+      } else {
+        setCallState("idle");
+        addToast("Failed to start call");
       }
     } catch (e) {
       setCallState("idle");
+      addToast("Failed to start call");
     }
   };
 

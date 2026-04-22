@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from backend.storage import Storage
 from backend.telemetry import get_latest_metrics
@@ -82,7 +82,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-APM-API-Key"],
 )
 
@@ -107,6 +107,17 @@ class StatusUpdate(BaseModel):
 class PeerCreate(BaseModel):
     name: str
     ip: str
+
+    @field_validator("ip")
+    @classmethod
+    def validate_ip(cls, v):
+        parts = v.split(".")
+        if len(parts) != 4:
+            raise ValueError("Invalid IPv4 address")
+        for part in parts:
+            if not part.isdigit() or not 0 <= int(part) <= 255:
+                raise ValueError("Invalid IPv4 address")
+        return v
 
 class Peer(BaseModel):
     id: str
@@ -242,6 +253,8 @@ def add_peer(body: PeerCreate):
 
 @app.delete("/api/peers/{peer_id}")
 def remove_peer(peer_id: str):
+    if peer_id == app.state.local_peer_id:
+        raise HTTPException(403, "Cannot delete the local peer")
     storage: Storage = app.state.storage
     if not storage.get_peer(peer_id):
         raise HTTPException(404, "Peer not found")
@@ -253,6 +266,8 @@ def get_status():
     storage: Storage = app.state.storage
     local_id = app.state.local_peer_id
     peer = storage.get_peer(local_id)
+    if not peer:
+        raise HTTPException(500, "Local peer missing")
     return {"status": peer["status"], "peer_id": local_id}
 
 @app.post("/api/status")

@@ -34,6 +34,33 @@ class StorageTestCase(unittest.TestCase):
             self.assertIsNotNone(timed_out)
             self.assertEqual(timed_out["status"], "timeout")
 
+    def test_add_peer(self):
+        """Test that add_peer persists a peer with expected fields."""
+        with tempfile.NamedTemporaryFile() as tmp:
+            storage = Storage(db_path=tmp.name)
+            peer = storage.add_peer("Test Peer", "192.168.1.100")
+            assert peer["name"] == "Test Peer"
+            assert peer["ip"] == "192.168.1.100"
+            assert peer["status"] == "online"
+            assert peer["id"].startswith("peer-")
+            fetched = storage.get_peer(peer["id"])
+            assert fetched is not None
+            assert fetched["name"] == "Test Peer"
+
+    def test_delete_peer(self):
+        """Test that delete_peer removes a peer."""
+        with tempfile.NamedTemporaryFile() as tmp:
+            storage = Storage(db_path=tmp.name)
+            peer = storage.add_peer("To Delete", "10.0.0.1")
+            storage.delete_peer(peer["id"])
+            assert storage.get_peer(peer["id"]) is None
+
+    def test_delete_missing_peer(self):
+        """Test that deleting a non-existent peer doesn't raise."""
+        with tempfile.NamedTemporaryFile() as tmp:
+            storage = Storage(db_path=tmp.name)
+            storage.delete_peer("peer-nonexistent")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -114,6 +114,7 @@ const APMDashboard = () => {
   const speechRecognitionRef = useRef(null);
   const shouldRunRecognitionRef = useRef(false);
   const speechUnsupportedNotifiedRef = useRef(false);
+  const translationCursorRef = useRef(0);
 
   const addToast = (message) => {
     const id = Date.now();
@@ -428,6 +429,24 @@ const APMDashboard = () => {
         time: Date.now(),
       },
     ]);
+
+    if (activeSession?.id && translatedText) {
+      try {
+        await apiFetch(`/api/session/${activeSession.id}/translation`, {
+          method: "POST",
+          body: JSON.stringify({
+            sender_peer_id: localParticipant.id,
+            source_language: source,
+            target_language: target,
+            original_text: text,
+            translated_text: translatedText,
+            timestamp_ms: Date.now(),
+          }),
+        });
+      } catch (_) {
+        // Keep local UX responsive even if delivery fails.
+      }
+    }
   };
 
   // Real-time on-screen translation stream from microphone speech.
@@ -519,7 +538,65 @@ const APMDashboard = () => {
         speechRecognitionRef.current = null;
       }
     };
-  }, [callState, sourceLang, targetLang, translationEnabled]);
+  }, [activeSession?.id, callState, localParticipant.id, sourceLang, targetLang, translationEnabled]);
+
+  useEffect(() => {
+    if (!(activeSession?.id && callState === "connected" && translationEnabled)) {
+      translationCursorRef.current = 0;
+      return undefined;
+    }
+
+    const pollIncomingTranslations = async () => {
+      try {
+        const res = await apiFetch(
+          `/api/session/${activeSession.id}/translations?since_ms=${translationCursorRef.current}`,
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const entries = Array.isArray(data?.translations) ? data.translations : [];
+        if (entries.length === 0) return;
+
+        let maxTimestamp = translationCursorRef.current;
+        const remoteEntries = entries
+          .filter((entry) => entry?.sender_peer_id && entry.sender_peer_id !== localParticipant.id)
+          .map((entry) => {
+            const timestamp = Number(entry.timestamp_ms) || Date.now();
+            maxTimestamp = Math.max(maxTimestamp, timestamp);
+            return {
+              orig: entry.original_text || "",
+              trans: entry.translated_text || "",
+              from: "remote",
+              time: timestamp,
+              lang: entry.target_language || targetLang,
+            };
+          })
+          .filter((entry) => entry.orig && entry.trans);
+
+        entries.forEach((entry) => {
+          const timestamp = Number(entry?.timestamp_ms) || 0;
+          maxTimestamp = Math.max(maxTimestamp, timestamp);
+        });
+        translationCursorRef.current = maxTimestamp;
+
+        if (remoteEntries.length > 0) {
+          setTranslations((prev) => [...prev, ...remoteEntries].slice(-10));
+          if (!speakerMuted && "speechSynthesis" in window) {
+            remoteEntries.forEach((entry) => {
+              const utterance = new SpeechSynthesisUtterance(entry.trans);
+              utterance.lang = entry.lang || targetLang;
+              window.speechSynthesis.speak(utterance);
+            });
+          }
+        }
+      } catch (_) {
+        // Non-fatal polling errors.
+      }
+    };
+
+    pollIncomingTranslations();
+    const interval = setInterval(pollIncomingTranslations, 900);
+    return () => clearInterval(interval);
+  }, [activeSession?.id, callState, localParticipant.id, speakerMuted, targetLang, translationEnabled]);
 
   const initiateCall = async (peer) => {
     setCallState("calling");

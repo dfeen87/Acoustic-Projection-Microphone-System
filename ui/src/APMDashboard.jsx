@@ -52,6 +52,17 @@ const apiFetch = (path, options = {}) => {
   return fetch(url, { ...options, headers });
 };
 
+const parseApiError = async (res, fallback = "Request failed") => {
+  try {
+    const data = await res.json();
+    if (typeof data?.detail === "string" && data.detail.trim()) return data.detail;
+    if (typeof data?.message === "string" && data.message.trim()) return data.message;
+  } catch (_) {
+    // Ignore JSON parse issues; fall back below.
+  }
+  return `${fallback} (${res.status})`;
+};
+
 const Timer = ({ startTime }) => {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -144,11 +155,11 @@ const APMDashboard = () => {
       });
       if (!res.ok) {
         setOnlineStatus(previousStatus);
-        addToast("Failed to update status");
+        addToast(await parseApiError(res, "Failed to update status"));
       }
     } catch (e) {
       setOnlineStatus(previousStatus);
-      addToast("Failed to update status");
+      addToast("Failed to update status (network)");
     }
   };
 
@@ -275,8 +286,12 @@ const APMDashboard = () => {
         setNewPeerIp("");
         addToast("Peer added");
         fetchPeers();
+      } else {
+        addToast(await parseApiError(res, "Failed to add peer"));
       }
-    } catch (e) {}
+    } catch (e) {
+      addToast("Failed to add peer (network)");
+    }
   };
 
   const handleDeletePeer = async (e, peerId) => {
@@ -340,11 +355,11 @@ const APMDashboard = () => {
         });
       } else {
         setCallState("idle");
-        addToast("Failed to start call");
+        addToast(await parseApiError(res, "Failed to start call"));
       }
     } catch (e) {
       setCallState("idle");
-      addToast("Failed to start call");
+      addToast("Failed to start call (network)");
     }
   };
 
@@ -419,18 +434,32 @@ const APMDashboard = () => {
       setDialIp((prev) => prev + char);
     }
   };
-  const handleCallDialed = () => {
+  const handleCallDialed = async () => {
     if (!dialIp) return;
     const existing = peers.find((p) => p.ip === dialIp);
     if (existing) {
       initiateCall(existing);
     } else {
-      initiateCall({
-        id: "temp-" + dialIp,
-        name: `Unknown (${dialIp})`,
-        ip: dialIp,
-        status: "online",
-      });
+      try {
+        const registerRes = await apiFetch("/api/peers", {
+          method: "POST",
+          body: JSON.stringify({
+            name: `Peer ${dialIp}`,
+            ip: dialIp,
+          }),
+        });
+
+        if (!registerRes.ok) {
+          addToast(await parseApiError(registerRes, "Failed to register peer"));
+          return;
+        }
+
+        const registerData = await registerRes.json();
+        fetchPeers();
+        initiateCall(registerData.peer);
+      } catch (e) {
+        addToast("Failed to register peer (network)");
+      }
     }
   };
 

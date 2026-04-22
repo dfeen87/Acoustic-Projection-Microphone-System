@@ -794,7 +794,7 @@ const APMDashboard = () => {
               className="w-16 h-16 text-purple-300 mx-auto animate-spin"
               style={{ animationDuration: "3s" }}
             />
-            <p className="mt-6 text-2xl font-bold text-white">APM System v8.1</p>
+            <p className="mt-6 text-2xl font-bold text-white">APM System v8.2</p>
             <p className="mt-3 text-white/60 animate-pulse">Waking up server...</p>
             <p className="mt-2 text-sm text-white/40">
               Free tier instances sleep after inactivity. This takes about 30–60

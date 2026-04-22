@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Phone,
   PhoneOff,
@@ -111,6 +111,9 @@ const APMDashboard = () => {
   const [serverAuthEnabled, setServerAuthEnabled] = useState(false);
   const [onlineStatus, setOnlineStatus] = useState("online");
   const [incomingPopupVisible, setIncomingPopupVisible] = useState(false);
+  const speechRecognitionRef = useRef(null);
+  const shouldRunRecognitionRef = useRef(false);
+  const speechUnsupportedNotifiedRef = useRef(false);
 
   const addToast = (message) => {
     const id = Date.now();
@@ -368,40 +371,130 @@ const APMDashboard = () => {
     } catch (e) {}
   };
 
-  // Mock translation stream
-  useEffect(() => {
-    if (callState === "connected" && translationEnabled) {
-      const interval = setInterval(() => {
-        const mockTranslations = [
-          {
-            orig: "Hello, how are you?",
-            trans: "Hola, ¿cómo estás?",
-            from: "remote",
-            time: Date.now(),
-          },
-          {
-            orig: "I am doing great!",
-            trans: "¡Estoy muy bien!",
-            from: "local",
-            time: Date.now(),
-          },
-          {
-            orig: "What time is the meeting?",
-            trans: "¿A qué hora es la reunión?",
-            from: "remote",
-            time: Date.now(),
-          },
-        ];
-        const randomTrans =
-          mockTranslations[Math.floor(Math.random() * mockTranslations.length)];
-        setTranslations((prev) => [
-          ...prev.slice(-9),
-          { ...randomTrans, time: Date.now() },
-        ]);
-      }, 5000);
-      return () => clearInterval(interval);
+  const streamTranslationToScreen = async (spokenText) => {
+    const text = spokenText?.trim();
+    if (!text) return;
+
+    let translatedText = text;
+    const bridgeTranslator = globalThis?.APMTranslationBridge?.translate;
+    if (typeof bridgeTranslator === "function") {
+      try {
+        const result = await bridgeTranslator({
+          text,
+          sourceLang,
+          targetLang,
+        });
+        if (typeof result === "string" && result.trim()) {
+          translatedText = result.trim();
+        } else if (typeof result?.translatedText === "string" && result.translatedText.trim()) {
+          translatedText = result.translatedText.trim();
+        }
+      } catch (_) {
+        // Gracefully fall back to transcript text when the translation bridge is unavailable.
+      }
     }
-  }, [callState, translationEnabled]);
+
+    setTranslations((prev) => [
+      ...prev.slice(-9),
+      {
+        orig: text,
+        trans: translatedText,
+        from: "local",
+        time: Date.now(),
+      },
+    ]);
+  };
+
+  // Real-time on-screen translation stream from microphone speech.
+  useEffect(() => {
+    if (!(callState === "connected" && translationEnabled)) {
+      shouldRunRecognitionRef.current = false;
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef.current.onresult = null;
+        speechRecognitionRef.current.onend = null;
+        speechRecognitionRef.current.onerror = null;
+        speechRecognitionRef.current.stop();
+        speechRecognitionRef.current = null;
+      }
+      return undefined;
+    }
+
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      if (!speechUnsupportedNotifiedRef.current) {
+        addToast("Speech recognition is not available in this browser.");
+        speechUnsupportedNotifiedRef.current = true;
+      }
+      return undefined;
+    }
+
+    const localeByLang = {
+      ar: "ar-SA",
+      de: "de-DE",
+      en: "en-US",
+      es: "es-ES",
+      fr: "fr-FR",
+      hi: "hi-IN",
+      it: "it-IT",
+      ja: "ja-JP",
+      ko: "ko-KR",
+      pt: "pt-PT",
+      ru: "ru-RU",
+      zh: "zh-CN",
+    };
+
+    shouldRunRecognitionRef.current = true;
+    const recognition = new SpeechRecognition();
+    speechRecognitionRef.current = recognition;
+    recognition.lang = localeByLang[sourceLang] || sourceLang || "en-US";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        if (!result.isFinal) continue;
+        const transcript = result[0]?.transcript?.trim();
+        if (transcript) {
+          streamTranslationToScreen(transcript);
+        }
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (event?.error === "not-allowed") {
+        addToast("Microphone permission is required for real-time translation.");
+      }
+    };
+
+    recognition.onend = () => {
+      if (!shouldRunRecognitionRef.current) return;
+      try {
+        recognition.start();
+      } catch (_) {
+        // start() can throw if already started; ignore and rely on next onend.
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch (_) {
+      addToast("Unable to start voice capture for translation.");
+    }
+
+    return () => {
+      shouldRunRecognitionRef.current = false;
+      recognition.onresult = null;
+      recognition.onend = null;
+      recognition.onerror = null;
+      recognition.stop();
+      if (speechRecognitionRef.current === recognition) {
+        speechRecognitionRef.current = null;
+      }
+    };
+  }, [callState, sourceLang, targetLang, translationEnabled]);
 
   const initiateCall = async (peer) => {
     setCallState("calling");

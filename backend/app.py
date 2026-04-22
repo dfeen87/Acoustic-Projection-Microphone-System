@@ -137,7 +137,7 @@ async def lifespan(app: FastAPI):
     await telemetry_client.stop()
 
 
-app = FastAPI(title="APM FastAPI Backend", version="8.1.0", lifespan=lifespan)
+app = FastAPI(title="APM FastAPI Backend", version="8.2.0", lifespan=lifespan)
 
 _CORS_ORIGINS_ENV = os.environ.get("APM_CORS_ORIGINS", "")
 _CORS_ORIGINS = [origin.strip() for origin in _CORS_ORIGINS_ENV.split(",") if origin.strip()]

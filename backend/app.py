@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.storage import Storage
-from backend.telemetry import TelemetryClient, get_latest_metrics
+from backend.telemetry import get_latest_metrics
 
 # ---------------------------------------------------------------------------
 # API key authentication middleware (opt-in via APM_API_KEY env variable).
@@ -59,7 +59,9 @@ async def lifespan(app: FastAPI):
 
     telemetry_client = getattr(app.state, "telemetry_client", None)
     if telemetry_client is None:
-        raise RuntimeError("TelemetryClient must be injected via backend/main.py before app startup")
+        from backend.telemetry import TelemetryClient
+        telemetry_client = TelemetryClient()
+        app.state.telemetry_client = telemetry_client
     await telemetry_client.start()
 
     yield
@@ -299,7 +301,8 @@ def end_session(session_id: str):
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _UI_DIST_DIR = _PROJECT_ROOT / "ui" / "dist"
 _UI_ASSETS_DIR = _UI_DIST_DIR / "assets"
-app.mount("/assets", StaticFiles(directory=_UI_ASSETS_DIR), name="assets")
+if _UI_ASSETS_DIR.is_dir():
+    app.mount("/assets", StaticFiles(directory=_UI_ASSETS_DIR), name="assets")
 
 
 @app.get("/{full_path:path}")

@@ -2,7 +2,7 @@ import tempfile
 import time
 import unittest
 
-from storage import Storage
+from backend.storage import Storage
 
 
 class StorageTestCase(unittest.TestCase):

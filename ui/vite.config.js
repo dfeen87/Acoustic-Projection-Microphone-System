@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   server: {
+    port: 5173,
     proxy: {
       // so your UI can call http://localhost:5173/api/... and it forwards to FastAPI
       "/api": "http://localhost:8080",

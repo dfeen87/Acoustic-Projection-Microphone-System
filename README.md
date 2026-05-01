@@ -835,3 +835,6 @@ If you use this work in research, please cite:
 ---
 
 **Status**: Production Ready | **Version**: 7.0.0 | **Last Updated**: April 2026
+
+## Enterprise Consulting & Integration
+This architecture is fully open-source under the MIT License. If your organization requires custom scaling, proprietary integration, or dedicated technical consulting to deploy these models at an enterprise level, please reach out at: dfeen87@gmail.com

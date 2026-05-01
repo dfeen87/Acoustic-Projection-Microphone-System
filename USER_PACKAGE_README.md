@@ -401,7 +401,7 @@ APM Headphone Translator is free and open source.
 
 ## 📄 License
 
-Non-Commercial License - Free to use, modify, and distribute for non-commercial purposes
+MIT License - 100% open-source for personal, academic, and commercial use
 
 Copyright © 2026 Don Michael Feeney Jr.
 

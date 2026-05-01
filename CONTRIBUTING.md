@@ -108,7 +108,7 @@ ctest
 
 ## License
 
-By contributing, you agree your contributions will be licensed under the same non-commercial license as this project. Commercial use of contributions requires a separate commercial license — contact dfeen87@gmail.com.
+By contributing, you agree your contributions will be licensed under the MIT License used by this project.
 
 ---
 

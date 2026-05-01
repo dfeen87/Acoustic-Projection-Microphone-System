@@ -1,5 +1,6 @@
 # Acoustic Projection Microphone (APM) System
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/)
 ![Python](https://img.shields.io/badge/python-3.10+-blueviolet)

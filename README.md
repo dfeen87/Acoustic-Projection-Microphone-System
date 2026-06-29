@@ -782,13 +782,6 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for detailed roadmap including:
 
 ---
 
-## License
-
-This project is available for **non‑commercial use only** under the terms of the included LICENSE file.  
-Commercial use requires a separate paid license — contact dfeen87@gmail.com.
-
----
-
 ## 🙏 Acknowledgments
 
 - **Author**: Don Michael Feeney Jr.

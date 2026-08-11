@@ -6,7 +6,8 @@
  * Intended for diagnostics, testing, and tooling —
  * not control or decision logic.
  *
- * License: Non-Commercial
+ * Copyright (c) Don Michael Feeney Jr.
+ * Licensed under the MIT License.
  */
 #include <cstdint>
 #include <atomic>

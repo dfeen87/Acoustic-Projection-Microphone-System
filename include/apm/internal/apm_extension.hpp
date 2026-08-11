@@ -8,7 +8,8 @@
  * Extensions must not modify core timing,
  * signal integrity, or safety guarantees.
  *
- * License: Non-Commercial
+ * Copyright (c) Don Michael Feeney Jr.
+ * Licensed under the MIT License.
  */
 #include <string>
 #include <stdexcept>

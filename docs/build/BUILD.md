@@ -382,7 +382,7 @@ jobs:
 
 ## License
 
-Non-Commercial License - See [LICENSE](../../LICENSE) file for full license text.
+MIT License - See [LICENSE](../../LICENSE) file for full license text.
 
 ## Support
 

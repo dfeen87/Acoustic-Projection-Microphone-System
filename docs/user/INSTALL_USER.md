@@ -459,4 +459,4 @@ Help → Check for Updates
 ---
 
 *Version 7.0.0 | Last Updated: December 2025*  
-*Copyright © 2025 Don Michael Feeney Jr. | Non-Commercial License*
+*Copyright © 2025 Don Michael Feeney Jr. | MIT License*

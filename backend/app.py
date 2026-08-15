@@ -20,7 +20,12 @@ from pydantic import BaseModel, field_validator
 
 from backend.storage import Storage
 from backend.telemetry import get_latest_metrics
-from backend.intent_engine import intent_engine
+from backend.intent_engine import (
+    intent_engine,
+    IntentProcessResponse,
+    IntentProjectResponse,
+    IntentPhaseResponse,
+)
 
 # ---------------------------------------------------------------------------
 # API key authentication middleware (opt-in via APM_API_KEY env variable).
@@ -298,7 +303,7 @@ def health():
 # -----------------------------
 # APMS Intent Engine Endpoints
 # -----------------------------
-@app.post("/api/intent/process")
+@app.post("/api/intent/process", response_model=IntentProcessResponse)
 def process_intent_endpoint(body: IntentProcessRequest):
     return intent_engine.process_intent(
         text=body.text,
@@ -307,11 +312,11 @@ def process_intent_endpoint(body: IntentProcessRequest):
         selected_candidate_id=body.selected_candidate_id
     )
 
-@app.post("/api/intent/project")
+@app.post("/api/intent/project", response_model=IntentProjectResponse)
 def project_intent_endpoint(body: IntentProjectRequest):
     return intent_engine.project_semantic(text=body.text)
 
-@app.post("/api/intent/phase")
+@app.post("/api/intent/phase", response_model=IntentPhaseResponse)
 def phase_intent_endpoint(body: IntentPhaseRequest):
     return intent_engine.extract_emotional_phase(text=body.text)
 

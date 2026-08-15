@@ -10,8 +10,49 @@ import re
 import urllib.request
 import urllib.error
 from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+# Pydantic Schemas for APMS v9 Enterprise Contract
+class EmotionalPhase(BaseModel):
+    tone: str
+    pacing: str
+    micro_inflections: List[str] = Field(default_factory=list)
+    urgency_level: str
+    emotional_markers: List[str] = Field(default_factory=list)
+
+class CandidateInterpretation(BaseModel):
+    id: str
+    title: str
+    primary_intent: str
+    reformulated_message: str
+
+class ProjectionVectors(BaseModel):
+    dominant_vector: List[float]
+    semantic_space: Optional[Dict[str, Any]] = None
+    noise_suppressed_db: float
+    signal_to_noise_ratio: float
+
+class IntentProcessResponse(BaseModel):
+    primary_intent: str
+    secondary_intents: List[str]
+    constraints: List[str]
+    emotional_phase: EmotionalPhase
+    reformulated_message: str
+    is_ambiguous: bool
+    candidates: List[CandidateInterpretation]
+    projection_vectors: ProjectionVectors
+
+class IntentProjectResponse(BaseModel):
+    dominant_vector: List[float]
+    semantic_space: Dict[str, Any]
+    noise_suppressed_db: float
+    signal_to_noise_ratio: float
+
+class IntentPhaseResponse(BaseModel):
+    input_text: str
+    emotional_phase: EmotionalPhase
 
 # Fallback semantic vector dimensions generator / mock embedding helper
 def _generate_semantic_embedding(text: str, dim: int = 8) -> List[float]:

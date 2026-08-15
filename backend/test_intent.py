@@ -13,10 +13,29 @@ class TestIntentEndpoints(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("primary_intent", data)
+        self.assertIn("secondary_intents", data)
+        self.assertIn("constraints", data)
         self.assertIn("emotional_phase", data)
         self.assertIn("reformulated_message", data)
         self.assertIn("projection_vectors", data)
         self.assertEqual(data["emotional_phase"]["urgency_level"], "high")
+
+    def test_intent_process_personality_and_bilingual(self):
+        response = client.post(
+            "/api/intent/process",
+            json={
+                "text": "新しい機能をリリースしましょう ship feature",
+                "personality": {
+                    "style": "founder_voice",
+                    "use_emojis": True,
+                    "bilingual_jp": True
+                }
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("JP/EN preserved", data["reformulated_message"])
+        self.assertTrue(data["reformulated_message"].endswith("🚀"))
 
     def test_intent_process_ambiguity_and_candidate_selection(self):
         # Test vague input triggering ambiguity candidates
@@ -43,6 +62,16 @@ class TestIntentEndpoints(unittest.TestCase):
         self.assertFalse(data2["is_ambiguous"])
         self.assertEqual(len(data2["candidates"]), 0)
 
+    def test_intent_process_empty_input(self):
+        response = client.post(
+            "/api/intent/process",
+            json={"text": "   "}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["primary_intent"], "No input provided")
+        self.assertFalse(data["is_ambiguous"])
+
     def test_intent_project_endpoint(self):
         response = client.post(
             "/api/intent/project",
@@ -51,6 +80,7 @@ class TestIntentEndpoints(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("dominant_vector", data)
+        self.assertEqual(len(data["dominant_vector"]), 8)
         self.assertIn("noise_suppressed_db", data)
         self.assertIn("signal_to_noise_ratio", data)
 

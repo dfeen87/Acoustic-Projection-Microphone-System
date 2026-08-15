@@ -19,6 +19,13 @@ import {
   Wifi,
   WifiOff,
   X,
+  Sparkles,
+  Send,
+  Sliders,
+  CheckCircle2,
+  HelpCircle,
+  Cpu,
+  Zap,
 } from "lucide-react";
 
 const API_BASE = "";
@@ -98,6 +105,7 @@ const Timer = ({ startTime }) => {
 };
 
 const APMDashboard = () => {
+  const [activeTab, setActiveTab] = useState("intent"); // "call" or "intent"
   const [callState, setCallState] = useState("idle"); // idle, calling, ringing, connected
   const [activeSession, setActiveSession] = useState(null);
   const [micMuted, setMicMuted] = useState(false);
@@ -130,6 +138,17 @@ const APMDashboard = () => {
   const shouldRunRecognitionRef = useRef(false);
   const speechUnsupportedNotifiedRef = useRef(false);
   const translationCursorRef = useRef(0);
+
+  // APMS Intent Projection Engine State
+  const [apmsInputMode, setApmsInputMode] = useState("manual"); // "manual" | "live"
+  const [apmsInputText, setApmsInputText] = useState("");
+  const [apmsProcessing, setApmsProcessing] = useState(false);
+  const [apmsResult, setApmsResult] = useState(null);
+  const [apmsPersonality, setApmsPersonality] = useState({
+    style: "founder_voice",
+    use_emojis: true,
+    bilingual_jp: true,
+  });
 
   const addToast = (message) => {
     const id = Date.now();
@@ -477,6 +496,41 @@ const APMDashboard = () => {
       } catch (_) {
         // Keep local UX responsive even if delivery fails.
       }
+    }
+
+    // Live Mode APMS Integration: Automatically project active call stream text
+    if (apmsInputMode === "live") {
+      processApmsIntent(text);
+    }
+  };
+
+  // APMS Intent Engine processing trigger
+  const processApmsIntent = async (textToProcess, selectedCandidateId = null) => {
+    const text = (textToProcess || apmsInputText).trim();
+    if (!text) return;
+
+    setApmsProcessing(true);
+    try {
+      const res = await apiFetch("/api/intent/process", {
+        method: "POST",
+        body: JSON.stringify({
+          text: text,
+          source_lang: sourceLang,
+          personality: apmsPersonality,
+          selected_candidate_id: selectedCandidateId,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setApmsResult(data);
+      } else {
+        addToast(await parseApiError(res, "Failed to process intent"));
+      }
+    } catch (e) {
+      addToast("Failed to connect to APMS Intent Engine");
+    } finally {
+      setApmsProcessing(false);
     }
   };
 
@@ -866,7 +920,7 @@ const APMDashboard = () => {
 
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-6">
-        <div className="flex items-center justify-between bg-black/30 backdrop-blur-xl rounded-2xl p-4 border border-purple-500/20">
+        <div className="flex flex-col md:flex-row items-center justify-between bg-black/30 backdrop-blur-xl rounded-2xl p-4 border border-purple-500/20 gap-4">
           <div className="flex items-center gap-4">
             <div className="relative">
               <Radio className="w-10 h-10 text-purple-400" />
@@ -874,12 +928,38 @@ const APMDashboard = () => {
             </div>
             <div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                APM System v8.1
+                APM System v9.0
               </h1>
               <p className="text-sm text-gray-400">
-                Acoustic Projection & Translation
+                Communication-Quality & Intent Engine
               </p>
             </div>
+          </div>
+
+          {/* Top-Level Navigation Tabs */}
+          <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+            <button
+              onClick={() => setActiveTab("intent")}
+              className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === "intent"
+                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/30"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              Intent Projection Engine
+            </button>
+            <button
+              onClick={() => setActiveTab("call")}
+              className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === "call"
+                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/30"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              <Phone className="w-4 h-4" />
+              Call Dashboard
+            </button>
           </div>
 
           <div className="flex items-center gap-4">
@@ -923,475 +1003,807 @@ const APMDashboard = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Panel - Call Controls & Status */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Active Call Panel */}
+      {activeTab === "intent" ? (
+        /* APMS Intent Projection Engine Dedicated View */
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Controls Banner */}
           <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold flex items-center gap-2">
-                <Activity className="w-5 h-5 text-purple-400" />
-                Active Session
-              </h2>
-              {encryptionEnabled && (
-                <div className="flex items-center gap-2 bg-green-500/20 px-3 py-1 rounded-lg">
-                  <Lock className="w-4 h-4 text-green-400" />
-                  <span className="text-sm">E2E Encrypted</span>
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4 mb-6">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2 text-white">
+                  <Sparkles className="w-6 h-6 text-purple-400" />
+                  Intent Projection Engine
+                </h2>
+                <p className="text-sm text-gray-400">
+                  Projects human speech into semantic space, preserves emotional phase, and rewrites into structured AI-optimized language.
+                </p>
+              </div>
+
+              {/* Mode Toggle */}
+              <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10">
+                <button
+                  onClick={() => setApmsInputMode("manual")}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    apmsInputMode === "manual"
+                      ? "bg-purple-500 text-white"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  Manual Input Mode
+                </button>
+                <button
+                  onClick={() => setApmsInputMode("live")}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    apmsInputMode === "live"
+                      ? "bg-purple-500 text-white"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  Live Call Stream Mode
+                </button>
+              </div>
+            </div>
+
+            {/* Input Section */}
+            <div className="space-y-4">
+              {apmsInputMode === "manual" ? (
+                <div>
+                  <label className="text-xs font-semibold uppercase text-purple-300 block mb-2">
+                    Speech or Transcript Input
+                  </label>
+                  <div className="relative">
+                    <textarea
+                      value={apmsInputText}
+                      onChange={(e) => setApmsInputText(e.target.value)}
+                      placeholder="Type or paste human speech/transcript here (e.g. 'We need to fix the deployment pipeline ASAP or maybe evaluate trade-offs')..."
+                      className="w-full h-28 bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-purple-500 resize-none pr-12"
+                    />
+                    <button
+                      onClick={() => processApmsIntent()}
+                      disabled={apmsProcessing || !apmsInputText.trim()}
+                      className="absolute right-3 bottom-4 p-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-xl transition-all disabled:opacity-50"
+                    >
+                      <Send className="w-5 h-5 text-white" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Activity className="w-5 h-5 text-purple-400 animate-pulse" />
+                    <div>
+                      <p className="text-sm font-semibold text-white">Live Session Observation Active</p>
+                      <p className="text-xs text-gray-400">
+                        {callState === "connected"
+                          ? "APMS is continuously projecting incoming/outgoing call transcripts in real time."
+                          : "No active call session. Start a call in the Call Dashboard tab to observe live transcripts."}
+                      </p>
+                    </div>
+                  </div>
+                  {callState === "connected" && (
+                    <span className="px-3 py-1 bg-green-500/20 text-green-400 text-xs rounded-full border border-green-500/30">
+                      Live Stream Connected
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Settings / Personality controls */}
+              <div className="flex flex-wrap items-center gap-6 pt-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-purple-400" />
+                  <span className="text-gray-400 font-medium">Personality Style:</span>
+                  <select
+                    value={apmsPersonality.style}
+                    onChange={(e) =>
+                      setApmsPersonality((prev) => ({ ...prev, style: e.target.value }))
+                    }
+                    className="bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="founder_voice">Founder Voice (Expressive & Reflective)</option>
+                    <option value="technical">Technical Leader</option>
+                    <option value="concise">Direct & Concise</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="emojis_check"
+                    checked={apmsPersonality.use_emojis}
+                    onChange={(e) =>
+                      setApmsPersonality((prev) => ({ ...prev, use_emojis: e.target.checked }))
+                    }
+                    className="rounded border-white/20 bg-black/40 text-purple-500 focus:ring-purple-500"
+                  />
+                  <label htmlFor="emojis_check" className="text-gray-300">
+                    Emojis Enabled
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="jp_check"
+                    checked={apmsPersonality.bilingual_jp}
+                    onChange={(e) =>
+                      setApmsPersonality((prev) => ({ ...prev, bilingual_jp: e.target.checked }))
+                    }
+                    className="rounded border-white/20 bg-black/40 text-purple-500 focus:ring-purple-500"
+                  />
+                  <label htmlFor="jp_check" className="text-gray-300">
+                    Bilingual JP/EN Auto-Alignment
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Ambiguity Resolution Candidate Cards */}
+          {apmsResult?.is_ambiguous && apmsResult.candidates?.length > 0 && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <HelpCircle className="w-5 h-5 text-yellow-400" />
+                <h3 className="text-lg font-bold text-yellow-300">
+                  Multiple Probable Interpretations Detected
+                </h3>
+              </div>
+              <p className="text-sm text-gray-300 mb-4">
+                The input contains ambiguity. APMS projected the vector into 3 likely directions. Select an option to resolve ambiguity:
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {apmsResult.candidates.map((cand) => (
+                  <div
+                    key={cand.id}
+                    onClick={() => processApmsIntent(apmsInputText, cand.id)}
+                    className="p-4 bg-black/40 border border-yellow-500/20 hover:border-yellow-400 rounded-xl cursor-pointer transition-all hover:bg-yellow-500/10 group"
+                  >
+                    <p className="text-xs uppercase font-bold text-yellow-400 mb-1">{cand.title}</p>
+                    <p className="text-sm text-white font-medium mb-2">{cand.primary_intent}</p>
+                    <p className="text-xs text-gray-400 italic group-hover:text-gray-200">
+                      "{cand.reformulated_message}"
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* APMS Output Dashboard Cards */}
+          {apmsResult && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column: Intents & Constraints */}
+              <div className="lg:col-span-2 space-y-6">
+                {/* 1. Primary Intent */}
+                <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs uppercase tracking-wider font-bold text-purple-400">
+                      1. Primary Intent
+                    </span>
+                    <span className="px-2.5 py-0.5 bg-purple-500/20 text-purple-300 text-[10px] rounded-full border border-purple-500/30">
+                      Dominant Vector
+                    </span>
+                  </div>
+                  <p className="text-lg font-semibold text-white bg-purple-500/10 border border-purple-500/20 rounded-xl p-4">
+                    {apmsResult.primary_intent}
+                  </p>
+                </div>
+
+                {/* 2 & 3. Secondary Intents and Constraints */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Secondary Intents */}
+                  <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
+                    <span className="text-xs uppercase tracking-wider font-bold text-purple-400 block mb-3">
+                      2. Secondary Intents
+                    </span>
+                    <div className="space-y-2">
+                      {apmsResult.secondary_intents?.map((sec, idx) => (
+                        <div key={idx} className="flex items-start gap-2 bg-white/5 p-3 rounded-lg text-sm text-gray-200">
+                          <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                          <span>{sec}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Constraints */}
+                  <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
+                    <span className="text-xs uppercase tracking-wider font-bold text-pink-400 block mb-3">
+                      3. Constraints
+                    </span>
+                    <div className="space-y-2">
+                      {apmsResult.constraints?.map((con, idx) => (
+                        <div key={idx} className="flex items-start gap-2 bg-white/5 p-3 rounded-lg text-sm text-gray-200">
+                          <Shield className="w-4 h-4 text-pink-400 shrink-0 mt-0.5" />
+                          <span>{con}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. Reformulated AI-Optimized Message */}
+                <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs uppercase tracking-wider font-bold text-green-400 flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-green-400" />
+                      5. Reformulated AI-Optimized Message
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(apmsResult.reformulated_message);
+                        addToast("Copied to clipboard");
+                      }}
+                      className="text-xs bg-white/10 hover:bg-white/20 text-gray-300 px-3 py-1 rounded-lg transition-colors"
+                    >
+                      Copy Message
+                    </button>
+                  </div>
+                  <pre className="bg-black/60 border border-green-500/30 rounded-xl p-4 text-sm text-green-300 font-mono whitespace-pre-wrap overflow-x-auto">
+                    {apmsResult.reformulated_message}
+                  </pre>
+                </div>
+              </div>
+
+              {/* Right Column: Emotional Phase & Projection Vector Details */}
+              <div className="space-y-6">
+                {/* 4. Emotional Phase */}
+                <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
+                  <span className="text-xs uppercase tracking-wider font-bold text-purple-400 block mb-4">
+                    4. Emotional Phase Preservation
+                  </span>
+                  <div className="space-y-4 text-sm">
+                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
+                      <span className="text-gray-400">Tone</span>
+                      <span className="font-semibold text-purple-300">{apmsResult.emotional_phase?.tone}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
+                      <span className="text-gray-400">Pacing</span>
+                      <span className="font-semibold text-pink-300">{apmsResult.emotional_phase?.pacing}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
+                      <span className="text-gray-400">Urgency Level</span>
+                      <span
+                        className={`font-bold uppercase px-2.5 py-0.5 rounded text-xs ${
+                          apmsResult.emotional_phase?.urgency_level === "high"
+                            ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                            : "bg-green-500/20 text-green-400 border border-green-500/30"
+                        }`}
+                      >
+                        {apmsResult.emotional_phase?.urgency_level}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-xs text-gray-400 block mb-2">Micro-Inflections & Markers</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {apmsResult.emotional_phase?.micro_inflections?.map((m, i) => (
+                          <span key={i} className="px-2.5 py-1 bg-purple-500/20 text-purple-300 rounded-lg text-xs">
+                            {m}
+                          </span>
+                        ))}
+                        {apmsResult.emotional_phase?.emotional_markers?.map((m, i) => (
+                          <span key={i} className="px-2.5 py-1 bg-pink-500/20 text-pink-300 rounded-lg text-xs">
+                            {m}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. Projection Vector Math & Beamforming Details */}
+                <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Cpu className="w-5 h-5 text-purple-400" />
+                    <span className="text-xs uppercase tracking-wider font-bold text-purple-400">
+                      Projection Vector Metrics
+                    </span>
+                  </div>
+                  <div className="space-y-3 text-xs">
+                    <div className="flex justify-between p-2.5 bg-black/40 rounded-lg">
+                      <span className="text-gray-400">Noise Suppressed</span>
+                      <span className="text-green-400 font-mono font-bold">
+                        -{apmsResult.projection_vectors?.noise_suppressed_db} dB
+                      </span>
+                    </div>
+                    <div className="flex justify-between p-2.5 bg-black/40 rounded-lg">
+                      <span className="text-gray-400">Signal-to-Noise Ratio (SNR)</span>
+                      <span className="text-purple-400 font-mono font-bold">
+                        {apmsResult.projection_vectors?.signal_to_noise_ratio} dB
+                      </span>
+                    </div>
+                    <div className="p-3 bg-black/40 rounded-lg">
+                      <span className="text-gray-400 block mb-2">Dominant Vector Coefficients</span>
+                      <div className="flex gap-1">
+                        {apmsResult.projection_vectors?.dominant_vector?.map((v, i) => (
+                          <div
+                            key={i}
+                            title={`Dim ${i}: ${v}`}
+                            className="flex-1 bg-purple-500/40 rounded-sm hover:bg-purple-400 transition-colors"
+                            style={{ height: `${Math.max(8, Math.abs(v) * 40)}px` }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Call Dashboard View */
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Active Call Panel */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-purple-400" />
+                  Active Session
+                </h2>
+                {encryptionEnabled && (
+                  <div className="flex items-center gap-2 bg-green-500/20 px-3 py-1 rounded-lg">
+                    <Lock className="w-4 h-4 text-green-400" />
+                    <span className="text-sm">E2E Encrypted</span>
+                  </div>
+                )}
+              </div>
+
+              {callState === "idle" && (
+                <div className="text-center py-12">
+                  <Phone className="w-16 h-16 mx-auto mb-4 text-gray-500" />
+                  <p className="text-gray-400 mb-2">No active call</p>
+                  <p className="text-sm text-gray-500">
+                    Select a peer to start a call
+                  </p>
+                </div>
+              )}
+
+              {callState === "calling" && (
+                <div className="text-center py-12">
+                  <div className="relative inline-block mb-4">
+                    <PhoneOutgoing className="w-16 h-16 text-purple-400 animate-pulse" />
+                    <div className="absolute inset-0 w-16 h-16 border-4 border-purple-400 rounded-full animate-ping" />
+                  </div>
+                  <p className="text-lg mb-2">
+                    Calling {activeSession?.peer?.name}...
+                  </p>
+                  <p className="text-sm text-gray-400">
+                    {activeSession?.peer?.ip}
+                  </p>
+                  <button
+                    onClick={endCall}
+                    className="mt-6 px-6 py-3 bg-red-500 hover:bg-red-600 rounded-xl transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {callState === "ringing" && (
+                <div className="text-center py-12">
+                  <div className="relative inline-block mb-4">
+                    <PhoneIncoming className="w-16 h-16 text-green-400 animate-bounce" />
+                  </div>
+                  <p className="text-lg mb-2">
+                    Incoming call from {activeSession?.peer?.name}
+                  </p>
+                  <p className="text-sm text-gray-400 mb-6">
+                    {activeSession?.peer?.ip}
+                  </p>
+                  <div className="flex gap-4 justify-center">
+                    <button
+                      onClick={acceptCall}
+                      className="px-8 py-3 bg-green-500 hover:bg-green-600 rounded-xl transition-colors flex items-center gap-2"
+                    >
+                      <Phone className="w-5 h-5" />
+                      Accept
+                    </button>
+                    <button
+                      onClick={rejectCall}
+                      className="px-8 py-3 bg-red-500 hover:bg-red-600 rounded-xl transition-colors flex items-center gap-2"
+                    >
+                      <PhoneOff className="w-5 h-5" />
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {callState === "connected" && activeSession && (
+                <div>
+                  <div className="flex items-center justify-between mb-6 p-4 bg-purple-500/10 rounded-xl">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-xl font-bold">
+                        {activeSession.peer.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-semibold flex items-center gap-2">
+                          {activeSession.peer.name}
+                          {metrics.latency_ms < 50 && (
+                            <span className="text-[10px] px-2 py-0.5 bg-green-500/20 text-green-400 rounded-full border border-green-500/30">
+                              Excellent
+                            </span>
+                          )}
+                          {metrics.latency_ms >= 50 &&
+                            metrics.latency_ms <= 150 && (
+                              <span className="text-[10px] px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-full border border-yellow-500/30">
+                                Good
+                              </span>
+                            )}
+                          {metrics.latency_ms > 150 && (
+                            <span className="text-[10px] px-2 py-0.5 bg-red-500/20 text-red-400 rounded-full border border-red-500/30">
+                              Poor
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-sm text-gray-400">
+                          {activeSession.peer.ip}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-400">Duration</p>
+                      <Timer startTime={activeSession.startTime} />
+                    </div>
+                  </div>
+
+                  {/* Audio Visualization */}
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Activity className="w-4 h-4 text-purple-400" />
+                      <span className="text-sm text-gray-400">Audio Level</span>
+                    </div>
+                    <div className="h-16 bg-black/50 rounded-lg p-2 flex items-end gap-1">
+                      {Array.from({ length: 40 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="flex-1 bg-gradient-to-t from-purple-600 to-pink-500 rounded-sm transition-all duration-100"
+                          style={{
+                            height: `${Math.max(5, Math.random() * audioLevel)}%`,
+                            opacity: Math.random() * 0.5 + 0.5,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Controls */}
+                  <div className="flex gap-4 justify-center">
+                    <button
+                      onClick={() => setMicMuted(!micMuted)}
+                      className={`p-4 rounded-xl transition-colors ${
+                        micMuted
+                          ? "bg-red-500 hover:bg-red-600"
+                          : "bg-white/10 hover:bg-white/20"
+                      }`}
+                    >
+                      {micMuted ? (
+                        <MicOff className="w-6 h-6" />
+                      ) : (
+                        <Mic className="w-6 h-6" />
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => setSpeakerMuted(!speakerMuted)}
+                      className={`p-4 rounded-xl transition-colors ${
+                        speakerMuted
+                          ? "bg-red-500 hover:bg-red-600"
+                          : "bg-white/10 hover:bg-white/20"
+                      }`}
+                    >
+                      {speakerMuted ? (
+                        <VolumeX className="w-6 h-6" />
+                      ) : (
+                        <Volume2 className="w-6 h-6" />
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => setTranslationEnabled(!translationEnabled)}
+                      className={`p-4 rounded-xl transition-colors ${
+                        translationEnabled
+                          ? "bg-purple-500 hover:bg-purple-600"
+                          : "bg-white/10 hover:bg-white/20"
+                      }`}
+                    >
+                      <Globe className="w-6 h-6" />
+                    </button>
+
+                    <button
+                      onClick={endCall}
+                      className="p-4 bg-red-500 hover:bg-red-600 rounded-xl transition-colors"
+                    >
+                      <PhoneOff className="w-6 h-6" />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
 
-            {callState === "idle" && (
-              <div className="text-center py-12">
-                <Phone className="w-16 h-16 mx-auto mb-4 text-gray-500" />
-                <p className="text-gray-400 mb-2">No active call</p>
-                <p className="text-sm text-gray-500">
-                  Select a peer to start a call
-                </p>
-              </div>
-            )}
-
-            {callState === "calling" && (
-              <div className="text-center py-12">
-                <div className="relative inline-block mb-4">
-                  <PhoneOutgoing className="w-16 h-16 text-purple-400 animate-pulse" />
-                  <div className="absolute inset-0 w-16 h-16 border-4 border-purple-400 rounded-full animate-ping" />
-                </div>
-                <p className="text-lg mb-2">
-                  Calling {activeSession?.peer?.name}...
-                </p>
-                <p className="text-sm text-gray-400">
-                  {activeSession?.peer?.ip}
-                </p>
-                <button
-                  onClick={endCall}
-                  className="mt-6 px-6 py-3 bg-red-500 hover:bg-red-600 rounded-xl transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
-
-            {callState === "ringing" && (
-              <div className="text-center py-12">
-                <div className="relative inline-block mb-4">
-                  <PhoneIncoming className="w-16 h-16 text-green-400 animate-bounce" />
-                </div>
-                <p className="text-lg mb-2">
-                  Incoming call from {activeSession?.peer?.name}
-                </p>
-                <p className="text-sm text-gray-400 mb-6">
-                  {activeSession?.peer?.ip}
-                </p>
-                <div className="flex gap-4 justify-center">
-                  <button
-                    onClick={acceptCall}
-                    className="px-8 py-3 bg-green-500 hover:bg-green-600 rounded-xl transition-colors flex items-center gap-2"
-                  >
-                    <Phone className="w-5 h-5" />
-                    Accept
-                  </button>
-                  <button
-                    onClick={rejectCall}
-                    className="px-8 py-3 bg-red-500 hover:bg-red-600 rounded-xl transition-colors flex items-center gap-2"
-                  >
-                    <PhoneOff className="w-5 h-5" />
-                    Reject
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {callState === "connected" && activeSession && (
-              <div>
-                <div className="flex items-center justify-between mb-6 p-4 bg-purple-500/10 rounded-xl">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-xl font-bold">
-                      {activeSession.peer.name.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-semibold flex items-center gap-2">
-                        {activeSession.peer.name}
-                        {metrics.latency_ms < 50 && (
-                          <span className="text-[10px] px-2 py-0.5 bg-green-500/20 text-green-400 rounded-full border border-green-500/30">
-                            Excellent
-                          </span>
-                        )}
-                        {metrics.latency_ms >= 50 &&
-                          metrics.latency_ms <= 150 && (
-                            <span className="text-[10px] px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-full border border-yellow-500/30">
-                              Good
-                            </span>
-                          )}
-                        {metrics.latency_ms > 150 && (
-                          <span className="text-[10px] px-2 py-0.5 bg-red-500/20 text-red-400 rounded-full border border-red-500/30">
-                            Poor
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-sm text-gray-400">
-                        {activeSession.peer.ip}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-gray-400">Duration</p>
-                    <Timer startTime={activeSession.startTime} />
+            {/* Translation Display */}
+            {translationEnabled && callState === "connected" && (
+              <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <Globe className="w-5 h-5 text-purple-400" />
+                    Live Call Translation
+                  </h2>
+                  <p className="text-xs text-gray-400">
+                    Transcript capture + spoken translated audio output
+                  </p>
+                  <div className="flex gap-2 text-sm">
+                    <span className="px-3 py-1 bg-purple-500/20 rounded-lg">
+                      {sourceLang.toUpperCase()}
+                    </span>
+                    <span className="text-gray-500">→</span>
+                    <span className="px-3 py-1 bg-pink-500/20 rounded-lg">
+                      {targetLang.toUpperCase()}
+                    </span>
                   </div>
                 </div>
 
-                {/* Audio Visualization */}
-                <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Activity className="w-4 h-4 text-purple-400" />
-                    <span className="text-sm text-gray-400">Audio Level</span>
-                  </div>
-                  <div className="h-16 bg-black/50 rounded-lg p-2 flex items-end gap-1">
-                    {Array.from({ length: 40 }).map((_, i) => (
+                <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar">
+                  {translations.length === 0 ? (
+                    <p className="text-center text-gray-500 py-8">
+                      Listening for live call speech...
+                    </p>
+                  ) : (
+                    translations.map((trans, idx) => (
                       <div
-                        key={i}
-                        className="flex-1 bg-gradient-to-t from-purple-600 to-pink-500 rounded-sm transition-all duration-100"
-                        style={{
-                          height: `${Math.max(5, Math.random() * audioLevel)}%`,
-                          opacity: Math.random() * 0.5 + 0.5,
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Controls */}
-                <div className="flex gap-4 justify-center">
-                  <button
-                    onClick={() => setMicMuted(!micMuted)}
-                    className={`p-4 rounded-xl transition-colors ${
-                      micMuted
-                        ? "bg-red-500 hover:bg-red-600"
-                        : "bg-white/10 hover:bg-white/20"
-                    }`}
-                  >
-                    {micMuted ? (
-                      <MicOff className="w-6 h-6" />
-                    ) : (
-                      <Mic className="w-6 h-6" />
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => setSpeakerMuted(!speakerMuted)}
-                    className={`p-4 rounded-xl transition-colors ${
-                      speakerMuted
-                        ? "bg-red-500 hover:bg-red-600"
-                        : "bg-white/10 hover:bg-white/20"
-                    }`}
-                  >
-                    {speakerMuted ? (
-                      <VolumeX className="w-6 h-6" />
-                    ) : (
-                      <Volume2 className="w-6 h-6" />
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => setTranslationEnabled(!translationEnabled)}
-                    className={`p-4 rounded-xl transition-colors ${
-                      translationEnabled
-                        ? "bg-purple-500 hover:bg-purple-600"
-                        : "bg-white/10 hover:bg-white/20"
-                    }`}
-                  >
-                    <Globe className="w-6 h-6" />
-                  </button>
-
-                  <button
-                    onClick={endCall}
-                    className="p-4 bg-red-500 hover:bg-red-600 rounded-xl transition-colors"
-                  >
-                    <PhoneOff className="w-6 h-6" />
-                  </button>
+                        key={idx}
+                        className={`p-4 rounded-xl border ${
+                          trans.from === "local"
+                            ? "bg-purple-500/20 border-purple-500/30"
+                            : "bg-white/5 border-white/10"
+                        }`}
+                      >
+                        <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">
+                          {trans.from === "local" ? "You said" : "Peer said"}
+                        </p>
+                        <p className="text-sm text-gray-400 mb-1">{trans.orig}</p>
+                        <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">
+                          Spoken translation
+                        </p>
+                        <p className="text-base">{trans.trans}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Translation Display */}
-          {translationEnabled && callState === "connected" && (
-            <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold flex items-center gap-2">
-                  <Globe className="w-5 h-5 text-purple-400" />
-                  Live Call Translation
+          {/* Right Panel - Peers & Settings */}
+          <div className="space-y-6">
+            {/* Dial Pad */}
+            {callState === "idle" && (
+              <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
+                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                  <Phone className="w-5 h-5 text-purple-400" />
+                  Dial
                 </h2>
-                <p className="text-xs text-gray-400">
-                  Transcript capture + spoken translated audio output
-                </p>
-                <div className="flex gap-2 text-sm">
-                  <span className="px-3 py-1 bg-purple-500/20 rounded-lg">
-                    {sourceLang.toUpperCase()}
-                  </span>
-                  <span className="text-gray-500">→</span>
-                  <span className="px-3 py-1 bg-pink-500/20 rounded-lg">
-                    {targetLang.toUpperCase()}
-                  </span>
+                <div className="bg-black/40 p-4 rounded-xl mb-4">
+                  <div className="text-2xl font-mono text-center tracking-wider h-8 min-h-8">
+                    {dialIp || <span className="text-gray-600">Enter IP</span>}
+                  </div>
                 </div>
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0"].map(
+                    (key) => (
+                      <button
+                        key={key}
+                        onClick={() => handleDial(key)}
+                        className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-lg font-semibold transition-colors"
+                      >
+                        {key}
+                      </button>
+                    ),
+                  )}
+                  <button
+                    onClick={() => handleDial("delete")}
+                    className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-lg font-semibold transition-colors flex items-center justify-center text-red-400"
+                  >
+                    ⌫
+                  </button>
+                </div>
+                <button
+                  onClick={handleCallDialed}
+                  className="w-full py-4 bg-green-500 hover:bg-green-600 rounded-xl flex items-center justify-center gap-2 transition-colors font-bold"
+                >
+                  <Phone className="w-5 h-5" />
+                  Call
+                </button>
               </div>
+            )}
 
-              <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar">
-                {translations.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">
-                    Listening for live call speech...
+            {/* Peers List */}
+            <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <Users className="w-5 h-5 text-purple-400" />
+                Available Peers
+              </h2>
+
+              <div className="space-y-3">
+                {peers.length === 0 ? (
+                  <p className="text-gray-400 text-sm text-center py-4">
+                    No peers yet — add one below to get started
                   </p>
                 ) : (
-                  translations.map((trans, idx) => (
+                  peers.map((peer) => (
                     <div
-                      key={idx}
-                      className={`p-4 rounded-xl border ${
-                        trans.from === "local"
-                          ? "bg-purple-500/20 border-purple-500/30"
-                          : "bg-white/5 border-white/10"
-                      }`}
+                      key={peer.id}
+                      className="p-4 bg-white/5 hover:bg-white/10 rounded-xl transition-colors cursor-pointer group relative"
+                      onClick={() => callState === "idle" && initiateCall(peer)}
                     >
-                      <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">
-                        {trans.from === "local" ? "You said" : "Peer said"}
-                      </p>
-                      <p className="text-sm text-gray-400 mb-1">{trans.orig}</p>
-                      <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">
-                        Spoken translation
-                      </p>
-                      <p className="text-base">{trans.trans}</p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-lg font-bold">
+                            {peer.name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-semibold">{peer.name}</p>
+                            <p className="text-xs text-gray-400">{peer.ip}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              peer.status === "online"
+                                ? "bg-green-400"
+                                : "bg-yellow-400"
+                            }`}
+                          />
+                          {callState === "idle" && (
+                            <Phone className="w-5 h-5 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          )}
+                          {callState === "idle" && (
+                            <button
+                              onClick={(e) => handleDeletePeer(e, peer.id)}
+                              className="ml-2 p-1 hover:bg-red-500/20 rounded text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   ))
                 )}
               </div>
-            </div>
-          )}
-        </div>
 
-        {/* Calibration Modal */}
-        {showCalibration && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-purple-500/30 rounded-2xl p-6 max-w-md w-full">
-              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <Settings className="w-5 h-5 text-purple-400" />
-                Auto-Calibration
-              </h2>
-
-              <div className="mb-6">
-                <div className="flex justify-between text-sm mb-2 text-gray-400">
-                  <span>Progress</span>
-                  <span>{Math.round(calibrationState.progress * 100)}%</span>
-                </div>
-                <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
-                  <div
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 h-full transition-all duration-300"
-                    style={{ width: `${calibrationState.progress * 100}%` }}
+              <form
+                onSubmit={handleAddPeer}
+                className="mt-6 pt-6 border-t border-white/10"
+              >
+                <h3 className="text-sm font-semibold mb-3">Add Peer</h3>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Name"
+                    value={newPeerName}
+                    onChange={(e) => setNewPeerName(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500 text-sm"
+                    required
                   />
+                  <input
+                    type="text"
+                    placeholder="IP Address (e.g. 192.168.1.100)"
+                    value={newPeerIp}
+                    onChange={(e) => setNewPeerIp(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500 text-sm"
+                    pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="w-full py-2 bg-purple-500 hover:bg-purple-600 rounded-lg transition-colors text-sm font-semibold"
+                  >
+                    Add
+                  </button>
                 </div>
-              </div>
-
-              <div className="bg-black/40 rounded-xl p-4 mb-6">
-                <h3 className="font-semibold text-purple-300 mb-2">
-                  Current Step: {calibrationState.step}
-                </h3>
-                <p className="text-sm text-gray-400">
-                  {calibrationState.step === "Idle" &&
-                    "Ready to begin calibration."}
-                  {calibrationState.step === "MeasureNoiseFloor" &&
-                    "Measuring ambient noise. Please remain quiet..."}
-                  {calibrationState.step === "MeasureGain" &&
-                    "Please speak at a normal volume..."}
-                  {calibrationState.step === "MeasureLatency" &&
-                    "Estimating round-trip latency..."}
-                  {calibrationState.step === "Complete" &&
-                    "Calibration successful!"}
-                </p>
-
-                {calibrationState.result && (
-                  <div className="mt-4 pt-4 border-t border-white/10 space-y-2 text-sm text-green-300">
-                    <div>
-                      Noise Floor:{" "}
-                      {calibrationState.result.rms_noise_floor_db.toFixed(1)} dB
-                    </div>
-                    <div>
-                      Suggested Gain:{" "}
-                      {(
-                        calibrationState.result.recommended_input_gain * 100
-                      ).toFixed(0)}
-                      %
-                    </div>
-                    <div>
-                      Est. Latency:{" "}
-                      {calibrationState.result.estimated_latency_ms.toFixed(1)}{" "}
-                      ms
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => {
-                    handleCalibrationAction("cancel");
-                    setShowCalibration(false);
-                  }}
-                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-                >
-                  Close
-                </button>
-                {calibrationState.step === "Idle" ? (
-                  <button
-                    onClick={() => handleCalibrationAction("start")}
-                    className="px-4 py-2 rounded-lg bg-purple-500 hover:bg-purple-600 transition-colors start-btn"
-                  >
-                    Start
-                  </button>
-                ) : calibrationState.step !== "Complete" ? (
-                  <button
-                    onClick={() => handleCalibrationAction("advance")}
-                    className="px-4 py-2 rounded-lg bg-pink-500 hover:bg-pink-600 transition-colors next-step-btn"
-                  >
-                    Next Step
-                  </button>
-                ) : null}
-              </div>
+              </form>
             </div>
           </div>
-        )}
+        </div>
+      )}
+      </div>
 
-        {/* Right Panel - Peers & Settings */}
-        <div className="space-y-6">
-          {/* Dial Pad */}
-          {callState === "idle" && (
-            <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
-              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <Phone className="w-5 h-5 text-purple-400" />
-                Dial
-              </h2>
-              <div className="bg-black/40 p-4 rounded-xl mb-4">
-                <div className="text-2xl font-mono text-center tracking-wider h-8 min-h-8">
-                  {dialIp || <span className="text-gray-600">Enter IP</span>}
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0"].map(
-                  (key) => (
-                    <button
-                      key={key}
-                      onClick={() => handleDial(key)}
-                      className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-lg font-semibold transition-colors"
-                    >
-                      {key}
-                    </button>
-                  ),
-                )}
-                <button
-                  onClick={() => handleDial("delete")}
-                  className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-lg font-semibold transition-colors flex items-center justify-center text-red-400"
-                >
-                  ⌫
-                </button>
-              </div>
-              <button
-                onClick={handleCallDialed}
-                className="w-full py-4 bg-green-500 hover:bg-green-600 rounded-xl flex items-center justify-center gap-2 transition-colors font-bold"
-              >
-                <Phone className="w-5 h-5" />
-                Call
-              </button>
-            </div>
-          )}
-
-          {/* Peers List */}
-          <div className="bg-black/30 backdrop-blur-xl rounded-2xl p-6 border border-purple-500/20">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Users className="w-5 h-5 text-purple-400" />
-              Available Peers
+      {/* Calibration Modal */}
+      {showCalibration && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-purple-500/30 rounded-2xl p-6 max-w-md w-full">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <Settings className="w-5 h-5 text-purple-400" />
+              Auto-Calibration
             </h2>
 
-            <div className="space-y-3">
-              {peers.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-4">
-                  No peers yet — add one below to get started
-                </p>
-              ) : (
-                peers.map((peer) => (
-                  <div
-                    key={peer.id}
-                    className="p-4 bg-white/5 hover:bg-white/10 rounded-xl transition-colors cursor-pointer group relative"
-                    onClick={() => callState === "idle" && initiateCall(peer)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-lg font-bold">
-                          {peer.name.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-semibold">{peer.name}</p>
-                          <p className="text-xs text-gray-400">{peer.ip}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div
-                          className={`w-2 h-2 rounded-full ${
-                            peer.status === "online"
-                              ? "bg-green-400"
-                              : "bg-yellow-400"
-                          }`}
-                        />
-                        {callState === "idle" && (
-                          <Phone className="w-5 h-5 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        )}
-                        {callState === "idle" && (
-                          <button
-                            onClick={(e) => handleDeletePeer(e, peer.id)}
-                            className="ml-2 p-1 hover:bg-red-500/20 rounded text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
+            <div className="mb-6">
+              <div className="flex justify-between text-sm mb-2 text-gray-400">
+                <span>Progress</span>
+                <span>{Math.round(calibrationState.progress * 100)}%</span>
+              </div>
+              <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 h-full transition-all duration-300"
+                  style={{ width: `${calibrationState.progress * 100}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="bg-black/40 rounded-xl p-4 mb-6">
+              <h3 className="font-semibold text-purple-300 mb-2">
+                Current Step: {calibrationState.step}
+              </h3>
+              <p className="text-sm text-gray-400">
+                {calibrationState.step === "Idle" &&
+                  "Ready to begin calibration."}
+                {calibrationState.step === "MeasureNoiseFloor" &&
+                  "Measuring ambient noise. Please remain quiet..."}
+                {calibrationState.step === "MeasureGain" &&
+                  "Please speak at a normal volume..."}
+                {calibrationState.step === "MeasureLatency" &&
+                  "Estimating round-trip latency..."}
+                {calibrationState.step === "Complete" &&
+                  "Calibration successful!"}
+              </p>
+
+              {calibrationState.result && (
+                <div className="mt-4 pt-4 border-t border-white/10 space-y-2 text-sm text-green-300">
+                  <div>
+                    Noise Floor:{" "}
+                    {calibrationState.result.rms_noise_floor_db.toFixed(1)} dB
                   </div>
-                ))
+                  <div>
+                    Suggested Gain:{" "}
+                    {(
+                      calibrationState.result.recommended_input_gain * 100
+                    ).toFixed(0)}
+                    %
+                  </div>
+                  <div>
+                    Est. Latency:{" "}
+                    {calibrationState.result.estimated_latency_ms.toFixed(1)}{" "}
+                    ms
+                  </div>
+                </div>
               )}
             </div>
 
-            <form
-              onSubmit={handleAddPeer}
-              className="mt-6 pt-6 border-t border-white/10"
-            >
-              <h3 className="text-sm font-semibold mb-3">Add Peer</h3>
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="Name"
-                  value={newPeerName}
-                  onChange={(e) => setNewPeerName(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500 text-sm"
-                  required
-                />
-                <input
-                  type="text"
-                  placeholder="IP Address (e.g. 192.168.1.100)"
-                  value={newPeerIp}
-                  onChange={(e) => setNewPeerIp(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500 text-sm"
-                  pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
-                  required
-                />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  handleCalibrationAction("cancel");
+                  setShowCalibration(false);
+                }}
+                className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+              >
+                Close
+              </button>
+              {calibrationState.step === "Idle" ? (
                 <button
-                  type="submit"
-                  className="w-full py-2 bg-purple-500 hover:bg-purple-600 rounded-lg transition-colors text-sm font-semibold"
+                  onClick={() => handleCalibrationAction("start")}
+                  className="px-4 py-2 rounded-lg bg-purple-500 hover:bg-purple-600 transition-colors start-btn"
                 >
-                  Add
+                  Start
                 </button>
-              </div>
-            </form>
+              ) : calibrationState.step !== "Complete" ? (
+                <button
+                  onClick={() => handleCalibrationAction("advance")}
+                  className="px-4 py-2 rounded-lg bg-pink-500 hover:bg-pink-600 transition-colors next-step-btn"
+                >
+                  Next Step
+                </button>
+              ) : null}
+            </div>
           </div>
-
         </div>
-      </div>
-      </div>
+      )}
 
       {/* Settings Modal */}
       {settingsOpen && (

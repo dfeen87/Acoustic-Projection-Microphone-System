@@ -20,6 +20,7 @@ from pydantic import BaseModel, field_validator
 
 from backend.storage import Storage
 from backend.telemetry import get_latest_metrics
+from backend.intent_engine import intent_engine
 
 # ---------------------------------------------------------------------------
 # API key authentication middleware (opt-in via APM_API_KEY env variable).
@@ -241,6 +242,18 @@ class SessionTranslationCreate(BaseModel):
     translated_text: str
     timestamp_ms: float | None = None
 
+class IntentProcessRequest(BaseModel):
+    text: str
+    source_lang: str = "auto"
+    personality: dict | None = None
+    selected_candidate_id: str | None = None
+
+class IntentProjectRequest(BaseModel):
+    text: str
+
+class IntentPhaseRequest(BaseModel):
+    text: str
+
 # -----------------------------
 # Mock State for New Features
 # -----------------------------
@@ -281,6 +294,26 @@ session_translations_lock = threading.Lock()
 @app.get("/health")
 def health():
     return {"ok": True}
+
+# -----------------------------
+# APMS Intent Engine Endpoints
+# -----------------------------
+@app.post("/api/intent/process")
+def process_intent_endpoint(body: IntentProcessRequest):
+    return intent_engine.process_intent(
+        text=body.text,
+        source_lang=body.source_lang,
+        personality_config=body.personality,
+        selected_candidate_id=body.selected_candidate_id
+    )
+
+@app.post("/api/intent/project")
+def project_intent_endpoint(body: IntentProjectRequest):
+    return intent_engine.project_semantic(text=body.text)
+
+@app.post("/api/intent/phase")
+def phase_intent_endpoint(body: IntentPhaseRequest):
+    return intent_engine.extract_emotional_phase(text=body.text)
 
 @app.get("/api/config")
 def get_config():

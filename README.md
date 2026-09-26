@@ -4,7 +4,7 @@
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/)
 ![Python](https://img.shields.io/badge/python-3.10+-blueviolet)
 ![React](https://img.shields.io/badge/react-18.0+-61dafb)
-![Version](https://img.shields.io/badge/version-7.0.0-blue)
+![Version](https://img.shields.io/badge/version-10.0.0-blue)
 ![Status](https://img.shields.io/badge/status-active-success)
 ![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows-lightgrey)
 ![Build](https://img.shields.io/badge/build-Vite%20%7C%20CMake-orange)
@@ -53,13 +53,23 @@ Production-grade implementation of an advanced acoustic projection microphone sy
 - **Production Launcher**: Enterprise-grade startup system with automatic health checks and monitoring
 - **REST API with Global Node Access**: FastAPI-based REST API for peer discovery and session management across all network nodes
 
-## New in Version 7.0.0
+## New in Version 10.0.0 (V10)
 
-- **Auto-Calibration Mode**: Streamlines initial setup by automatically tuning key system parameters.
-- **Real-Time Monitoring Dashboard**: Expands live visibility into system status and processing behavior.
-- **Adaptive Feedback Suppression**: Reduces acoustic feedback dynamically during operation.
-- **Preset Profiles**: Adds ready-to-use configuration profiles for common deployment scenarios.
-- **Diagnostics**: Improves troubleshooting with clearer runtime checks and diagnostic reporting.
+- **Smartglasses Acoustic-Projection-Microphone-System (A-P-M-S)**:
+  - 2-mic temple frame topology (14–16 cm baseline) with geometric acoustic projection onto the virtual mouth vector.
+  - Phase-aware spectral masking and phase coherence index ($\gamma$) for spatial filtering without bulky front-frame physical arrays.
+  - Ultra-low-power recursive IIR spectral gain smoothing (< 15–20 mW DSP power budget).
+  - Sub-10 ms processing latency operating on native 16 kHz, 10 ms frames (160 samples per channel).
+- **AI Assistant Front-End Integration Interface**:
+  - Direct 16 kHz mono PCM output contract for downstream wake-word detection (Sensory, Porcupine/PvRecorder) and streaming ASR (Whisper, Kaldi, ONNX Runtime).
+  - Embedded frame metadata output including VAD confidence (`speech_confidence`), real-time SNR (`estimated_snr_db`), and speech activity decisions (`is_speech_active`).
+- **Comprehensive C++ DSP & Test Suite Additions**:
+  - Dedicated DSP pipeline module in `src/dsp/smartglasses_apm/smartglasses_apm.cpp`.
+  - Mathematical projection correctness tests (`tests/test_smartglasses_apm_projection.cpp`).
+  - Pipeline latency, MACs/cycle benchmark, and numerical edge-case robustness tests (`tests/test_smartglasses_apm_dsp_pipeline.cpp`).
+- **Detailed Specification & Pseudocode Documentation**:
+  - Complete architecture spec at [`docs/architecture/smartglasses_apm_spec.md`](docs/architecture/smartglasses_apm_spec.md).
+  - Step-by-step algorithm pseudocode at [`docs/architecture/smartglasses_apm_pseudocode.md`](docs/architecture/smartglasses_apm_pseudocode.md).
 
 ## 🌍 Local Translation (100% Private)
 
@@ -833,7 +843,7 @@ If you use this work in research, please cite:
 
 ---
 
-**Status**: Production Ready | **Version**: 7.0.0 | **Last Updated**: April 2026
+**Status**: Production Ready | **Version**: 10.0.0 | **Last Updated**: April 2026
 
 ## Enterprise Consulting & Integration
 This architecture is fully open-source under the MIT License. If your organization requires custom scaling, proprietary integration, or dedicated technical consulting to deploy these models at an enterprise level, please reach out at: dfeen87@gmail.com

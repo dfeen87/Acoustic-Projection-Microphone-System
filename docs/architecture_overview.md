@@ -116,8 +116,14 @@ Correctness and interpretability come first.
 
 ---
 
+## Smartglasses A-P-M-S Architecture
+
+The Smartglasses Acoustic-Projection-Microphone-System (A-P-M-S) provides ultra-low-power geometric projection onto the virtual mouth acoustic axis for 2-mic temple arrays:
+- Architecture Specification: [`docs/architecture/smartglasses_apm_spec.md`](architecture/smartglasses_apm_spec.md)
+- Pseudocode Reference: [`docs/architecture/smartglasses_apm_pseudocode.md`](architecture/smartglasses_apm_pseudocode.md)
+
 ## Status
 
-This architecture reflects the current stable direction of the project as of v2.2.x and is expected to evolve conservatively.
+This architecture reflects the current stable direction of the project as of **v10.0.0** and is expected to evolve conservatively.
 
 

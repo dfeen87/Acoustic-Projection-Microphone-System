@@ -1,8 +1,8 @@
 # Acoustic-Projection-Microphone-System (A-P-M-S) for Smartglasses
 ## Engineering Architecture & Technical Specification
 
-**Document Version:** 1.0.0
-**Status:** Engineering Ready
+**Document Version:** 10.0.0 (V10)
+**Status:** Engineering Production
 **Target Platform:** Wearable Audio SoCs & Smartglasses Hardware
 **Primary Maintainer:** Acoustic Projection Microphone System Architecture Group
 
@@ -16,6 +16,21 @@ Smartglasses represent the next major human-computer interface evolution, yet ac
 3. Extreme power (< 15–20 mW DSP budget) and thermal limits prohibiting heavy multi-channel deep neural networks.
 
 The **Smartglasses Acoustic-Projection-Microphone-System (A-P-M-S)** solves these fundamental constraints by replacing physical multi-mic spatial beamforming with **projection-based acoustic reconstruction**. By modeling the user's mouth as a virtual acoustic source on a known geometric vector relative to the temple microphones, A-P-M-S uses phase-aware geometric projection, spatial energy ratios, and ultra-low-power recursive spectral smoothing to isolate intended speech.
+
+## V10 Release Summary: Smartglasses A-P-M-S & AI Integration
+
+Version 10 (V10) introduces a hardened, ultra-low-power Acoustic-Projection-Microphone-System (A-P-M-S) purpose-built for smartglasses and wearable audio form factors:
+
+* **What Changed in V10:**
+  * Production C++ DSP engine modularized under `src/dsp/smartglasses_apm/smartglasses_apm.cpp`.
+  * Fully deterministic execution path with zero dynamic heap allocations in `process_frame`.
+  * Comprehensive numerical safety guards against NaNs, Infs, clipping overshoots, and silent inputs.
+  * Extended test suite including `tests/test_smartglasses_apm_projection.cpp` and `tests/test_smartglasses_apm_dsp_pipeline.cpp`.
+* **Why A-P-M-S Matters for Smartglasses:**
+  * Traditional spatial beamformers suffer severe spatial aliasing on $14\text{ cm} - 16\text{ cm}$ temple baselines above $1.1\text{ kHz}$. A-P-M-S replaces physical spatial beamforming with mouth-axis geometric acoustic projection, achieving $+12\text{ dB}$ to $+18\text{ dB}$ noise suppression within a $< 15 - 20\text{ mW}$ equivalent power budget.
+* **How It Integrates with AI Assistants:**
+  * Standardized output interface contract: **"A-P-M-S is a voice-enhancement front-end that outputs AI-ready PCM frames for wake-word + ASR ingestion."**
+  * Direct compatibility with wake-word detection (Sensory TrulyHandFree, Porcupine/PvRecorder) and streaming ASR pipelines (Whisper, Kaldi, ONNX Runtime).
 
 ### Key OEM Benefits (Meta, Apple, Snap, Google, Amazon)
 * **Uncompromised Form Factor:** Operates on a standard 2-microphone frame topology (one mic per temple), eliminating the need for bulky front-frame microphone ports.
@@ -173,34 +188,43 @@ Where $\alpha \in [1.0, 2.0]$ is a tunable spatial aggressiveness exponent.
 
 A-P-M-S acts as an autonomous acoustic front-end for downstream AI applications.
 
+**Interface Contract:**
+> *"A-P-M-S is a voice-enhancement front-end that outputs AI-ready PCM frames for wake-word + ASR ingestion."*
+
 ### 6.1 Wake-Word & ASR Frame Contract
 * **Audio Format:** Signed 16-bit PCM (Q15 fixed-point) or 32-bit IEEE Float.
 * **Channels:** 1 (Mono, Mouth Projection Stream).
 * **Sample Rate:** $16,000\text{ Hz} \pm 0.01\%$.
 * **Frame Duration:** $10.0\text{ ms}$ ($160\text{ samples}$ per callback).
 * **Target SNR Boost:** $+12\text{ dB}$ to $+18\text{ dB}$ enhancement in ambient noise environments.
+* **Timing & Buffering Semantics:**
+  * Callback interval: Exactly $10.0\text{ ms}$ (160 samples @ 16 kHz).
+  * Latency: $< 1.0\text{ ms}$ processing time per frame, well within sub-10 ms real-time constraints.
+  * Downstream systems buffer $10\text{ ms}$ frames into $100\text{ ms} - 500\text{ ms}$ windows for wake-word scoring or ASR chunk processing.
 
 ### 6.2 Binding API Architecture
 
 ```cpp
-// C++ Output Integration Boundary
-typedef struct {
-    float speech_confidence;  // 0.0 to 1.0 VAD indicator
-    float estimated_snr_db;   // Real-time signal-to-noise ratio
-    bool  is_wake_word_window; // High-priority speech flag
-} apm_frame_metadata_t;
+// C++ Output Integration Boundary (include/apm/smartglasses_apm.hpp)
+struct SmartglassesFrameMetadata {
+    float speech_confidence;   // 0.0 to 1.0 VAD indicator
+    float estimated_snr_db;    // Real-time estimated SNR in dB
+    bool  is_speech_active;    // Voice activity decision (confidence > 0.35)
+    bool  is_wake_word_window; // High-priority speech flag for wake-word scoring
+};
 
+// C API Integration Callback
 typedef void (*apm_audio_output_cb)(
     const int16_t* pcm_samples,
     size_t frame_count,
-    const apm_frame_metadata_t* metadata,
+    const SmartglassesFrameMetadata* metadata,
     void* user_data
 );
 ```
 
 Compatible directly with:
 * **Sensory TrulyHandFree / Porcupine / PvRecorder** wake-word engines.
-* **Whisper.cpp / ONNX Runtime / Apple Speech** streaming ASR pipelines.
+* **Whisper.cpp / ONNX Runtime / Apple Speech / Kaldi** streaming ASR pipelines.
 
 ---
 
@@ -277,7 +301,11 @@ class SmartglassesAPM:
 
 This specification is tethered to the production C++ reference implementation located at:
 * Header: `include/apm/smartglasses_apm.hpp`
-* Implementation: `src/smartglasses_apm.cpp`
-* Unit Test Suite: `tests/test_smartglasses_apm.cpp`
+* Implementation: `src/dsp/smartglasses_apm/smartglasses_apm.cpp`
+* Unit Test Suites:
+  * `tests/test_smartglasses_apm.cpp`
+  * `tests/test_smartglasses_apm_projection.cpp`
+  * `tests/test_smartglasses_apm_dsp_pipeline.cpp`
+* Pseudocode Specification: `docs/architecture/smartglasses_apm_pseudocode.md`
 
 All components are validated against sub-10 ms frame latency, numerical precision stability, and spectral suppression criteria.

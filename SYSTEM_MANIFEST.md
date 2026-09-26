@@ -16,9 +16,11 @@ for contributors, CI, Docker, and automated tooling.
 - Exposes the stable public API used by other layers.
 - Owns native build configuration and compiled artifacts.
 
-**Directories**
-- `include/apm/` (public API headers)
-- `src/`
+**Directories & Specs**
+- `include/apm/` (public API headers including `smartglasses_apm.hpp`)
+- `src/` (including `src/dsp/smartglasses_apm/`)
+- `docs/architecture/smartglasses_apm_spec.md` (smartglasses A-P-M-S architecture spec)
+- `docs/architecture/smartglasses_apm_pseudocode.md` (smartglasses A-P-M-S pseudocode)
 - `cmake/`
 - `config/`
 - `CMakeLists.txt`

@@ -146,8 +146,17 @@ applications that manage hardware I/O externally.
 
 ---
 
+## Smartglasses A-P-M-S Architecture
+
+The **Smartglasses Acoustic-Projection-Microphone-System (A-P-M-S)** operates on a 2-microphone temple topology (~14–16 cm baseline) tailored for wearable SoCs (< 15–20 mW DSP budget).
+Instead of bulky multi-mic physical delay-and-sum arrays, it uses geometric acoustic projection onto the virtual mouth vector, phase coherence masking, and low-power recursive spectral IIR smoothing.
+
+- Detailed Specification: [`docs/architecture/smartglasses_apm_spec.md`](architecture/smartglasses_apm_spec.md)
+- Step-by-Step Pseudocode: [`docs/architecture/smartglasses_apm_pseudocode.md`](architecture/smartglasses_apm_pseudocode.md)
+
 ## Use Cases
 
+- **Smartglasses & Wearables (Meta, Apple, Snap, Google, Amazon)**
 - **Real-time interpretation systems**
 - **Smart conference rooms**
 - **Accessibility devices**

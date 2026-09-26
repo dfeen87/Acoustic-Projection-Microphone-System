@@ -1,20 +1,22 @@
 # APM System - Production Features Roadmap
 
-Version: 7.0.0  
-Last Updated: December 2024  
-Status: Planning Phase
+Version: 10.0.0
+Last Updated: April 2026
+Status: Production
 
-## 📊 Current Status (v7.0.0 — Fully Operational)
+## 📊 Current Status (v10.0.0 — Fully Operational)
 
 | Feature | Status |
 |--------|--------|
 | Core DSP Pipeline | ✅ Complete |
+| **Smartglasses A-P-M-S 2-Mic Projection** | ✅ Complete |
 | Multi‑channel Beamforming | ✅ Complete |
 | Noise Suppression (LSTM) | ✅ Complete |
 | Echo Cancellation (NLMS) | ✅ Complete |
 | Voice Activity Detection | ✅ Complete |
 | Directional Projection | ✅ Complete |
 | **Local Translation Engine (Whisper + NLLB)** | ✅ Complete |
+| **AI Assistant Front-End Interface (Sensory/Porcupine/Whisper)** | ✅ Complete |
 | Translation Interface (C++ Bridge) | ✅ Complete |
 | Dockerized Build System | ✅ Complete |
 | CI‑Validated Architecture | ✅ Complete |
@@ -22,6 +24,12 @@ Status: Planning Phase
 
 
 ## 🗺️ Release Timeline (Daily Work — Expedited Versions)
+
+### **Version 10.0.0 — Smartglasses A-P-M-S & AI Integration**
+- Smartglasses 2-mic temple topology (14-16 cm baseline) with mouth vector acoustic projection
+- Phase coherence index and IIR temporal gain smoothing (< 15-20 mW complexity)
+- Standardized 16 kHz mono PCM 10 ms output contract for AI assistant ingestion (wake-word + streaming ASR)
+- C++ test suite hardening for math correctness, latency, and numerical edge cases
 
 ### **Version 7.0.0 — Foundation**
 - Real audio I/O (PortAudio / ALSA)
@@ -59,5 +67,5 @@ MIT License - See [LICENSE](LICENSE) file for details.
 ---
 
 **Last Updated:** December 11, 2025  
-**Document Version:** 7.0.0  
+**Document Version:** 10.0.0
 **Status:** Production

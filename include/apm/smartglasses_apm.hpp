@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <cmath>
+#include <complex>
 
 namespace apm {
 
@@ -11,11 +12,15 @@ namespace apm {
  * @file smartglasses_apm.hpp
  * @brief Acoustic-Projection-Microphone-System (A-P-M-S) for Smartglasses
  *
- * Designed for 2-microphone frame topologies (left and right temples).
- * Replaces physical delay-and-sum beamforming with geometric acoustic projection
- * onto the mouth vector, phase-coherence masking, and ultra-low-power IIR smoothing.
+ * Interface Contract:
+ * "A-P-M-S is a voice-enhancement front-end that outputs AI-ready PCM frames for wake-word + ASR ingestion."
  *
- * Native Frame Config: 16 kHz sample rate, 10 ms frame (160 samples per channel).
+ * Designed for 2-microphone frame topologies (left and right temples, ~14-16 cm baseline).
+ * Replaces physical delay-and-sum beamforming with geometric acoustic projection
+ * onto the virtual mouth acoustic vector, phase-coherence masking, and ultra-low-power
+ * recursive spectral IIR gain smoothing.
+ *
+ * Native Frame Configuration: 16 kHz sample rate, 10 ms frame (160 samples per channel).
  */
 
 struct SmartglassesApmConfig {
@@ -32,6 +37,7 @@ struct SmartglassesFrameMetadata {
     float speech_confidence{0.0f};  ///< VAD indicator [0.0, 1.0]
     float estimated_snr_db{0.0f};   ///< Real-time estimated SNR in dB
     bool is_speech_active{false};   ///< Voice activity decision
+    bool is_wake_word_window{false};///< High-priority speech flag for wake-word engines
 };
 
 class SmartglassesAPM {
@@ -40,12 +46,19 @@ public:
     ~SmartglassesAPM() = default;
 
     /**
+     * @brief Reset internal DSP state buffers and filter states.
+     */
+    void reset();
+
+    /**
      * @brief Process a single frame of dual-temple microphone audio.
+     *
+     * Real-time safe: Zero dynamic heap allocations in hot path.
      *
      * @param mic_left Left temple microphone samples (160 samples @ 16 kHz)
      * @param mic_right Right temple microphone samples (160 samples @ 16 kHz)
      * @param out_enhanced Output vector for mouth-projected mono PCM samples (160 samples)
-     * @param metadata Output metadata for downstream AI assistants (VAD / SNR)
+     * @param metadata Output metadata for downstream AI assistants (VAD / SNR / Wake-Word)
      * @return true if processing succeeded, false otherwise.
      */
     bool process_frame(
@@ -57,10 +70,16 @@ public:
 
     /**
      * @brief Process interleaved signed 16-bit PCM dual-channel input.
+     *
+     * @param pcm_interleaved_lr Interleaved L/R 16-bit PCM buffer (320 samples total for 160 frame)
+     * @param total_samples Total int16 elements in pcm_interleaved_lr (must be >= frame_size * 2)
+     * @param pcm_out_mono Output buffer for 16 kHz mono PCM 16-bit samples (160 samples)
+     * @param metadata Output metadata for downstream AI assistants
+     * @return true if processing succeeded, false otherwise.
      */
     bool process_frame_pcm16(
         const int16_t* pcm_interleaved_lr,
-        size_t total_samples, // 320 total for L/R interleaved 160 samples
+        size_t total_samples,
         int16_t* pcm_out_mono,
         SmartglassesFrameMetadata& metadata
     );
@@ -71,12 +90,18 @@ private:
     SmartglassesApmConfig config_;
     size_t num_bins_{0};
 
+    // Pre-allocated static buffers (No dynamic heap allocations in process_frame)
     std::vector<float> window_;
     std::vector<float> prev_gain_;
-
-    // Low-power DFT implementation buffers
     std::vector<float> cos_table_;
     std::vector<float> sin_table_;
+
+    // Working buffers pre-allocated in constructor
+    std::vector<float> win_L_;
+    std::vector<float> win_R_;
+    std::vector<std::complex<float>> L_fft_;
+    std::vector<std::complex<float>> R_fft_;
+    std::vector<std::complex<float>> S_enhanced_;
 };
 
 } // namespace apm

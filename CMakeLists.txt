@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
-project(AcousticProjectionMicrophone VERSION 7.0.0 LANGUAGES CXX)
+project(AcousticProjectionMicrophone VERSION 10.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -103,7 +103,7 @@ set(APM_CORE_SOURCES
     src/core/apm_system.cpp
     src/ptt_controller.cpp
     src/call_signaling.cpp
-    src/smartglasses_apm.cpp
+    src/dsp/smartglasses_apm/smartglasses_apm.cpp
 )
 
 # Add PortAudio audio device (always added, internal ifdef handles missing PA)
@@ -261,6 +261,20 @@ if(APM_ENABLE_TESTS)
     add_executable(smartglasses_apm_test tests/test_smartglasses_apm.cpp)
     target_link_libraries(smartglasses_apm_test PRIVATE apm_core GTest::gtest_main)
     add_test(NAME smartglasses_apm_test COMMAND smartglasses_apm_test)
+
+    # Smartglasses APM Math Projection tests
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_smartglasses_apm_projection.cpp)
+        add_executable(smartglasses_apm_projection_test tests/test_smartglasses_apm_projection.cpp)
+        target_link_libraries(smartglasses_apm_projection_test PRIVATE apm_core GTest::gtest_main)
+        add_test(NAME smartglasses_apm_projection_test COMMAND smartglasses_apm_projection_test)
+    endif()
+
+    # Smartglasses APM DSP Pipeline & Robustness tests
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_smartglasses_apm_dsp_pipeline.cpp)
+        add_executable(smartglasses_apm_dsp_pipeline_test tests/test_smartglasses_apm_dsp_pipeline.cpp)
+        target_link_libraries(smartglasses_apm_dsp_pipeline_test PRIVATE apm_core GTest::gtest_main)
+        add_test(NAME smartglasses_apm_dsp_pipeline_test COMMAND smartglasses_apm_dsp_pipeline_test)
+    endif()
 
     # Crypto tests
     if(HAVE_ENCRYPTION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_crypto.cpp)

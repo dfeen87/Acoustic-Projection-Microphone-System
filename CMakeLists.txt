@@ -103,6 +103,7 @@ set(APM_CORE_SOURCES
     src/core/apm_system.cpp
     src/ptt_controller.cpp
     src/call_signaling.cpp
+    src/smartglasses_apm.cpp
 )
 
 # Add PortAudio audio device (always added, internal ifdef handles missing PA)
@@ -255,6 +256,11 @@ if(APM_ENABLE_TESTS)
     add_executable(apm_features_test tests/test_apm_features.cpp)
     target_link_libraries(apm_features_test PRIVATE apm_core GTest::gtest_main)
     add_test(NAME apm_features_test COMMAND apm_features_test)
+
+    # Smartglasses APM Projection Engine tests
+    add_executable(smartglasses_apm_test tests/test_smartglasses_apm.cpp)
+    target_link_libraries(smartglasses_apm_test PRIVATE apm_core GTest::gtest_main)
+    add_test(NAME smartglasses_apm_test COMMAND smartglasses_apm_test)
 
     # Crypto tests
     if(HAVE_ENCRYPTION AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_crypto.cpp)

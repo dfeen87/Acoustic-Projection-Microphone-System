@@ -101,13 +101,16 @@ def main():
     logger.info("=" * 60)
     logger.info("APM REST API Server - Starting")
     logger.info("=" * 60)
-    bind_host = "0.0.0.0"
+    bind_host = args.host
     logger.info(f"Host: {bind_host}")
     logger.info(f"Port: {args.port}")
     logger.info(f"Reload: {args.reload}")
     logger.info(f"Log Level: {args.log_level}")
     
-    logger.info("🌐 Global node access enabled - API accessible from network")
+    if bind_host in {"0.0.0.0", "::"}:
+        logger.info("🌐 Global node access enabled - API accessible from network")
+    else:
+        logger.info("🔒 API access limited to bind host %s", bind_host)
     
     logger.info("=" * 60)
     logger.info("")

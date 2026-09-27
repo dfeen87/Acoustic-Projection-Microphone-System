@@ -3,6 +3,7 @@ APMS (Acoustic Projection Microphone System) v9 - Communication-Quality Engine
 Intent Projection, Semantic Beamforming, and Emotional Phase Preservation.
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -62,6 +63,9 @@ def _generate_semantic_embedding(text: str, dim: int = 8) -> List[float]:
 
     words = text.lower().split()
     length_factor = min(1.0, len(words) / 20.0)
+    stable_hash = int.from_bytes(
+        hashlib.sha256(text.encode("utf-8")).digest()[:4], "big"
+    )
 
     # Calculate basic semantic feature indicators
     urgency_kw = {"urgent", "asap", "immediately", "quick", "critical", "now", "help"}
@@ -75,7 +79,9 @@ def _generate_semantic_embedding(text: str, dim: int = 8) -> List[float]:
         sum(1 for w in words if w in question_kw) * 0.5 + 0.15,
         sum(1 for w in words if w in action_kw) * 0.5 + 0.25,
         length_factor,
-        0.5 + (hash(text) % 100) / 200.0,
+        # Avoid Python's process-randomized hash so fallback projections are
+        # stable across server restarts.
+        0.5 + (stable_hash % 100) / 200.0,
         0.3 + (len(text) % 50) / 100.0,
         0.8 if any(ord(c) > 0x3000 for c in text) else 0.2  # Multilingual / Japanese character presence
     ]
@@ -232,8 +238,11 @@ class IntentProjectionEngine:
         is_ambiguous = False
         candidates = []
 
-        vague_indicators = ["maybe", "or something", "or so", "not sure if", "either", "could be", "or", "とか", "かな"]
-        if (len(text.split()) < 4 and not text.endswith("?")) or any(v in lower_text for v in vague_indicators):
+        vague_phrases = ["maybe", "or something", "or so", "not sure if", "either", "could be", "とか", "かな"]
+        has_disjunction = bool(re.search(r"\bor\b", lower_text))
+        if (len(text.split()) < 4 and not text.endswith("?")) or has_disjunction or any(
+            phrase in lower_text for phrase in vague_phrases
+        ):
             is_ambiguous = True
 
         if is_ambiguous:

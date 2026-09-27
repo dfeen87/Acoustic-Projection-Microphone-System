@@ -43,7 +43,7 @@ public:
 
     /**
      * @brief Get the APM library version string.
-     * @return Version string (e.g. "10.0.0")
+     * @return Version string (e.g. "10.1.0")
      */
     std::string get_version() const;
 

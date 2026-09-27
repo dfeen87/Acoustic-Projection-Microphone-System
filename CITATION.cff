@@ -23,8 +23,8 @@ url: https://github.com/dfeen87/Acoustic-Projection-Microphone-System
 
 license: MIT
 
-version: 7.0.0
-date-released: 2026-04-05
+version: 10.1.0
+date-released: 2026-09-27
 
 keywords:
   - audio signal processing
@@ -44,6 +44,6 @@ preferred-citation:
     - given-names: Don Michael
       family-names: Feeney Jr.
   year: 2026
-  version: 7.0.0
+  version: 10.1.0
   repository-code: https://github.com/dfeen87/Acoustic-Projection-Microphone-System
   license: MIT

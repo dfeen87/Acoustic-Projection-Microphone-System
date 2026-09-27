@@ -177,7 +177,7 @@ Choose the language pairs you need from the `models/` folder:
 ### For Developers
 
 **Download the source code:**
-- `apm-source-7.0.0.tar.gz` (5MB)
+- `apm-source-10.1.0.tar.gz` (5MB)
 - See `BUILD.md` for compilation instructions
 
 ---
@@ -422,9 +422,9 @@ See LICENSE file for full terms.
 
 ---
 
-**Version**: 7.0.0  
-**Release Date**: April 2026  
-**Last Updated**: April 5, 2026
+**Version**: 10.1.0
+**Release Date**: September 2026
+**Last Updated**: September 27, 2026
 
 ### 7.0.0
 - Documentation polish and onboarding improvements

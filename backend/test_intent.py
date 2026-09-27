@@ -72,6 +72,14 @@ class TestIntentEndpoints(unittest.TestCase):
         self.assertEqual(data["primary_intent"], "No input provided")
         self.assertFalse(data["is_ambiguous"])
 
+    def test_or_inside_word_does_not_trigger_ambiguity(self):
+        response = client.post(
+            "/api/intent/process",
+            json={"text": "Please format the deployment configuration"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["is_ambiguous"])
+
     def test_intent_project_endpoint(self):
         response = client.post(
             "/api/intent/project",

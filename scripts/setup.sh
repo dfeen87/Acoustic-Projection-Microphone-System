@@ -20,7 +20,7 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 # Banner
 echo "============================================"
 echo "  APM System Setup Script"
-echo "  Version 7.0.0"
+echo "  Version 10.1.0"
 echo "============================================"
 echo ""
 

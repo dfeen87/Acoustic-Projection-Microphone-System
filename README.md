@@ -4,7 +4,7 @@
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/)
 ![Python](https://img.shields.io/badge/python-3.10+-blueviolet)
 ![React](https://img.shields.io/badge/react-18.0+-61dafb)
-![Version](https://img.shields.io/badge/version-10.0.0-blue)
+![Version](https://img.shields.io/badge/version-10.1.0-blue)
 ![Status](https://img.shields.io/badge/status-active-success)
 ![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows-lightgrey)
 ![Build](https://img.shields.io/badge/build-Vite%20%7C%20CMake-orange)
@@ -843,7 +843,7 @@ If you use this work in research, please cite:
 
 ---
 
-**Status**: Production Ready | **Version**: 10.0.0 | **Last Updated**: April 2026
+**Status**: Production Ready | **Version**: 10.1.0 | **Last Updated**: September 2026
 
 ## Enterprise Consulting & Integration
 This architecture is fully open-source under the MIT License. If your organization requires custom scaling, proprietary integration, or dedicated technical consulting to deploy these models at an enterprise level, please reach out at: dfeen87@gmail.com

@@ -1,7 +1,7 @@
 # Acoustic-Projection-Microphone-System (A-P-M-S) for Smartglasses
 ## Engineering Architecture & Technical Specification
 
-**Document Version:** 10.0.0 (V10)
+**Document Version:** 10.1.0 (V10)
 **Status:** Engineering Production
 **Target Platform:** Wearable Audio SoCs & Smartglasses Hardware
 **Primary Maintainer:** Acoustic Projection Microphone System Architecture Group

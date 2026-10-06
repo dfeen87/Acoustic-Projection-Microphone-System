@@ -5,6 +5,7 @@
 #include <cstring>
 #include <algorithm>
 #include <mutex>
+#include <atomic>
 
 namespace apm {
 namespace crypto {

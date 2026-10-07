@@ -19,42 +19,39 @@ inline float sanitize_sample(float v) {
     return std::clamp(v, -1.0f, 1.0f);
 }
 
+SmartglassesApmConfig sanitize_config(SmartglassesApmConfig config) {
+    if (config.fft_size < 2 || (config.fft_size & (config.fft_size - 1)) != 0) {
+        config.fft_size = 256;
+    }
+    if (config.frame_size <= 0 || config.frame_size > config.fft_size) {
+        config.frame_size = std::min(160, config.fft_size);
+    }
+    if (config.sample_rate <= 0) config.sample_rate = 16000;
+    if (!std::isfinite(config.min_gain_floor)) config.min_gain_floor = 0.10f;
+    if (!std::isfinite(config.alpha_smooth)) config.alpha_smooth = 0.85f;
+    if (!std::isfinite(config.spatial_exp)) config.spatial_exp = 1.5f;
+    if (!std::isfinite(config.mic_baseline_m) || config.mic_baseline_m <= 0) config.mic_baseline_m = 0.15f;
+    config.min_gain_floor = std::clamp(config.min_gain_floor, 0.001f, 1.0f);
+    config.alpha_smooth = std::clamp(config.alpha_smooth, 0.0f, 0.999f);
+    config.spatial_exp = std::clamp(config.spatial_exp, 0.1f, 5.0f);
+    return config;
+}
+
 } // namespace
 
 SmartglassesAPM::SmartglassesAPM(const SmartglassesApmConfig& config)
-    : config_(config),
-      num_bins_(config.fft_size / 2 + 1),
-      window_(config.fft_size, 0.0f),
+    : config_(sanitize_config(config)),
+      num_bins_(config_.fft_size / 2 + 1),
+      window_(config_.fft_size, 0.0f),
       prev_gain_(num_bins_, 1.0f),
-      win_L_(config.fft_size, 0.0f),
-      win_R_(config.fft_size, 0.0f),
+      win_L_(config_.fft_size, 0.0f),
+      win_R_(config_.fft_size, 0.0f),
       L_fft_(num_bins_),
       R_fft_(num_bins_),
-      S_enhanced_(num_bins_) {
-
-    // Sanitize config params to avoid division by zero or invalid sizes
-    if (config_.fft_size <= 0 || (config_.fft_size & (config_.fft_size - 1)) != 0) {
-        config_.fft_size = 256;
-    }
-    if (config_.frame_size <= 0 || config_.frame_size > config_.fft_size) {
-        config_.frame_size = 160;
-    }
-    if (config_.sample_rate <= 0) {
-        config_.sample_rate = 16000;
-    }
-    config_.min_gain_floor = std::clamp(config_.min_gain_floor, 0.001f, 1.0f);
-    config_.alpha_smooth = std::clamp(config_.alpha_smooth, 0.0f, 0.999f);
-    config_.spatial_exp = std::clamp(config_.spatial_exp, 0.1f, 5.0f);
-
-    num_bins_ = config_.fft_size / 2 + 1;
-    window_.assign(config_.fft_size, 0.0f);
-    prev_gain_.assign(num_bins_, 1.0f);
-
-    win_L_.assign(config_.fft_size, 0.0f);
-    win_R_.assign(config_.fft_size, 0.0f);
-    L_fft_.resize(num_bins_);
-    R_fft_.resize(num_bins_);
-    S_enhanced_.resize(num_bins_);
+      S_enhanced_(num_bins_),
+      pcm_left_(config_.frame_size),
+      pcm_right_(config_.frame_size),
+      pcm_output_(config_.frame_size) {
 
     // Construct Hann window for N_FFT = 256
     for (int i = 0; i < config_.fft_size; ++i) {
@@ -100,9 +97,6 @@ bool SmartglassesAPM::process_frame(
         return false;
     }
 
-    out_enhanced.resize(config_.frame_size);
-    std::fill(out_enhanced.begin(), out_enhanced.end(), 0.0f);
-
     // 1. Prepare Windowed STFT Buffers (zero-padded to 256) with input sanitization
     std::fill(win_L_.begin(), win_L_.end(), 0.0f);
     std::fill(win_R_.begin(), win_R_.end(), 0.0f);
@@ -111,6 +105,9 @@ bool SmartglassesAPM::process_frame(
         win_L_[i] = sanitize_sample(mic_left[i]) * window_[i];
         win_R_[i] = sanitize_sample(mic_right[i]) * window_[i];
     }
+    // Consume both inputs before writing output, including in-place callers.
+    out_enhanced.resize(config_.frame_size);
+    std::fill(out_enhanced.begin(), out_enhanced.end(), 0.0f);
 
     // 2. Real-valued DFT computation
     for (size_t k = 0; k < num_bins_; ++k) {
@@ -214,20 +211,16 @@ bool SmartglassesAPM::process_frame_pcm16(
         return false;
     }
 
-    std::vector<float> mic_L(config_.frame_size);
-    std::vector<float> mic_R(config_.frame_size);
-
     for (int i = 0; i < config_.frame_size; ++i) {
-        mic_L[i] = static_cast<float>(pcm_interleaved_lr[2 * i]) / 32768.0f;
-        mic_R[i] = static_cast<float>(pcm_interleaved_lr[2 * i + 1]) / 32768.0f;
+        pcm_left_[i] = static_cast<float>(pcm_interleaved_lr[2 * i]) / 32768.0f;
+        pcm_right_[i] = static_cast<float>(pcm_interleaved_lr[2 * i + 1]) / 32768.0f;
     }
 
-    std::vector<float> out_enhanced;
-    bool success = process_frame(mic_L, mic_R, out_enhanced, metadata);
+    bool success = process_frame(pcm_left_, pcm_right_, pcm_output_, metadata);
 
     if (success) {
         for (int i = 0; i < config_.frame_size; ++i) {
-            float clamped = std::clamp(out_enhanced[i] * 32768.0f, -32768.0f, 32767.0f);
+            float clamped = std::clamp(pcm_output_[i] * 32768.0f, -32768.0f, 32767.0f);
             pcm_out_mono[i] = static_cast<int16_t>(clamped);
         }
     }

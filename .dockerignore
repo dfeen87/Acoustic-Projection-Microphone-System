@@ -1,0 +1,16 @@
+.git
+build
+_codeql_build_dir
+**/node_modules
+**/__pycache__
+**/venv
+**/env
+**/*.sqlite*
+**/*.db
+**/*.log
+.env
+.env.*
+ui
+frontend
+launcher
+tests

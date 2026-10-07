@@ -4,7 +4,7 @@
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/)
 ![Python](https://img.shields.io/badge/python-3.10+-blueviolet)
 ![React](https://img.shields.io/badge/react-18.0+-61dafb)
-![Version](https://img.shields.io/badge/version-10.1.0-blue)
+![Version](https://img.shields.io/badge/version-11.0.0-blue)
 ![Status](https://img.shields.io/badge/status-active-success)
 ![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows-lightgrey)
 ![Build](https://img.shields.io/badge/build-Vite%20%7C%20CMake-orange)
@@ -52,6 +52,10 @@ Production-grade implementation of an advanced acoustic projection microphone sy
 - **High Performance**: FFTW-optimized FFT with STFT support, multi-threaded processing, SIMD-ready
 - **Production Launcher**: Enterprise-grade startup system with automatic health checks and monitoring
 - **REST API with Global Node Access**: FastAPI-based REST API for peer discovery and session management across all network nodes
+
+## BEDROCK baseline: v11.0.0
+
+Version 11 preserves the DSP/control/UI architecture while enforcing validation, authentication, persistence and test-runner contracts. See [release notes and invariant map](docs/releases/v11.0.0-bedrock.md). API-key-enabled deployments require credentials in the dashboard Settings; loading the page does not grant API access. Software validation does not certify microphone hardware, acoustic output safety or model accuracy.
 
 ## New in Version 10.0.0 (V10)
 
@@ -843,7 +847,7 @@ If you use this work in research, please cite:
 
 ---
 
-**Status**: Production Ready | **Version**: 10.1.0 | **Last Updated**: September 2026
+**Status**: Software baseline validated; target hardware validation required | **Version**: 11.0.0 | **Last Updated**: October 2026
 
 ## Enterprise Consulting & Integration
 This architecture is fully open-source under the MIT License. If your organization requires custom scaling, proprietary integration, or dedicated technical consulting to deploy these models at an enterprise level, please reach out at: dfeen87@gmail.com

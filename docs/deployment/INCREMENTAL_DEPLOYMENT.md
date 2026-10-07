@@ -1,5 +1,8 @@
 # APM System v7.0 - Incremental Deployment Guide
 
+Historical deployment guide. For the current release's build contracts and
+validation evidence, see the [11.0.0 BEDROCK report](../releases/v11.0.0-bedrock.md).
+
 This guide shows you how to deploy v2.0 features incrementally, building and testing at each stage.
 
 ## Stage 0: Current State (v1.0)

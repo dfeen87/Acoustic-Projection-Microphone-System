@@ -9,10 +9,10 @@
 #define APM_VERSION "@PROJECT_VERSION@"
 
 // Feature flags
-#cmakedefine HAVE_LOCAL_TRANSLATION
-#cmakedefine HAVE_TFLITE
-#cmakedefine HAVE_ENCRYPTION
-#cmakedefine HAVE_PORTAUDIO
+#cmakedefine HAVE_LOCAL_TRANSLATION 1
+#cmakedefine HAVE_TFLITE 1
+#cmakedefine HAVE_ENCRYPTION 1
+#cmakedefine HAVE_PORTAUDIO 1
 
 // Platform detection
 #if defined(_WIN32) || defined(_WIN64)

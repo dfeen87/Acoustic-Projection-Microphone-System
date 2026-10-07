@@ -5,6 +5,29 @@ All notable changes to the Acoustic Projection Microphone System (APMS) project 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.0.0] - 2026-10-07
+
+### Changed
+- Established the BEDROCK baseline while preserving the DSP, API and UI architecture.
+- Native session getters return owned optional snapshots; configured API authentication
+  requires the key header rather than credentials issued by loading a page.
+- Reject invalid numerical/configuration/profile evidence, stale or terminal session
+  transitions, unjoined signaling relays and malformed translation success results.
+- Make initialization, telemetry replacement and SQLite identity/incoming registration
+  preserve valid state at validation/failure boundaries; stop PTT on shutdown.
+- Correct callback deadlock and worker shutdown race, aliased DSP output, absent-driver status, launcher routing,
+  SDK installation, version metadata and failure propagation in tests/builds.
+- Enforce native Debug/Release assertions, minimal builds, backend/WebSocket tests,
+  launcher startup failure, SDK packaging and test-gated release/container workflows.
+
+### Added
+- Behavioral regressions and current-version consistency checks.
+- [Engineering report, compatibility changes and validation limits](docs/releases/v11.0.0-bedrock.md).
+
+The major increment includes incompatible public state, validation and authentication
+contracts under the project's stated Semantic Versioning policy. It does not certify
+hardware or model performance; earlier release history remains below.
+
 ## [10.1.0] - 2026-09-27
 
 ### Changed

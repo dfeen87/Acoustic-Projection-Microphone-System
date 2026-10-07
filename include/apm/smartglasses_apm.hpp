@@ -53,7 +53,9 @@ public:
     /**
      * @brief Process a single frame of dual-temple microphone audio.
      *
-     * Real-time safe: Zero dynamic heap allocations in hot path.
+     * No working-buffer allocations. Pre-size out_enhanced to frame_size
+     * to avoid growing the caller-owned output vector. Single caller per
+     * instance; processing and reset must not run concurrently.
      *
      * @param mic_left Left temple microphone samples (160 samples @ 16 kHz)
      * @param mic_right Right temple microphone samples (160 samples @ 16 kHz)
@@ -102,6 +104,9 @@ private:
     std::vector<std::complex<float>> L_fft_;
     std::vector<std::complex<float>> R_fft_;
     std::vector<std::complex<float>> S_enhanced_;
+    std::vector<float> pcm_left_;
+    std::vector<float> pcm_right_;
+    std::vector<float> pcm_output_;
 };
 
 } // namespace apm

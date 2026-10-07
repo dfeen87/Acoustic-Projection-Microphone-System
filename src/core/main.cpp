@@ -1,5 +1,6 @@
 #include "apm/apm_system.h"
 #include "apm/io/audio_device.h"
+#include "apm/config.h"
 #include <iostream>
 #include <thread>
 #include <atomic>
@@ -200,7 +201,11 @@ void signal_handler(int) {
     g_running = false;
 }
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc == 2 && std::string(argv[1]) == "--version") {
+        std::cout << APM_VERSION << '\n';
+        return 0;
+    }
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
 
@@ -337,6 +342,8 @@ int main() {
     if (!audio.start()) {
         std::cerr << "Failed to start audio device!" << std::endl;
         g_running = false;
+        if (processing_thread.joinable()) processing_thread.join();
+        return 1;
     } else {
         std::cout << "Audio started. Press Ctrl+C to stop." << std::endl;
     }

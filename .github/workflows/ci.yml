@@ -1,7 +1,7 @@
 name: CI/CD Pipeline
 
 permissions:
-  contents: write
+  contents: read
 
 on:
   push:
@@ -19,17 +19,17 @@ jobs:
   build-test:
     strategy:
       matrix:
-        os: [ubuntu-22.04, ubuntu-20.04, macos-12, macos-13]
+        os: [ubuntu-22.04, ubuntu-24.04, macos-14, macos-15]
         compiler: [gcc, clang]
+        build_type: [Debug, Release]
         exclude:
-          - os: macos-12
+          - os: macos-14
             compiler: gcc
-          - os: macos-13
+          - os: macos-15
             compiler: gcc
       fail-fast: false
     
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ startsWith(matrix.os, 'macos') }}
     
     steps:
     - name: Checkout code
@@ -57,6 +57,8 @@ jobs:
           ninja-build \
           libfftw3-dev \
           libfftw3-single3 \
+          libsodium-dev \
+          portaudio19-dev \
           lcov
         
         if [ "${{ matrix.compiler }}" = "clang" ]; then
@@ -71,7 +73,7 @@ jobs:
     - name: Install dependencies (macOS)
       if: startsWith(matrix.os, 'macos')
       run: |
-        brew install cmake ninja fftw || true
+        brew install cmake ninja fftw libsodium portaudio
         echo "CC=clang" >> $GITHUB_ENV
         echo "CXX=clang++" >> $GITHUB_ENV
     
@@ -79,31 +81,79 @@ jobs:
       run: |
         cmake -B build \
           -G Ninja \
-          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
           -DBUILD_TESTING=ON \
           -DBUILD_BENCHMARKS=ON \
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
     
     - name: Build
-      run: cmake --build build --config ${{ env.BUILD_TYPE }} -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+      run: cmake --build build --config ${{ matrix.build_type }} -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
     
     - name: Run tests
       working-directory: build
-      run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure --parallel $(nproc 2>/dev/null || sysctl -n hw.ncpu)
+      run: ctest -C ${{ matrix.build_type }} --no-tests=error --output-on-failure --parallel $(nproc 2>/dev/null || sysctl -n hw.ncpu)
     
     - name: Upload test results
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: test-results-${{ matrix.os }}-${{ matrix.compiler }}
+        name: test-results-${{ matrix.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}
         path: build/Testing/Temporary/LastTest.log
     
     - name: Upload compile commands
       if: matrix.os == 'ubuntu-22.04' && matrix.compiler == 'gcc'
       uses: actions/upload-artifact@v4
       with:
-        name: compile-commands
+        name: compile-commands-${{ matrix.build_type }}
         path: build/compile_commands.json
+
+
+  minimal-build:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+    - run: sudo apt-get update && sudo apt-get install -y cmake ninja-build libgtest-dev
+    - name: Build without optional dependencies
+      run: |
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DENABLE_LOCAL_TRANSLATION=OFF -DENABLE_ENCRYPTION=OFF -DENABLE_TFLITE=OFF
+        cmake --build build --parallel 2
+        ctest --test-dir build --no-tests=error --output-on-failure
+        build/apm_backend --version
+        bash scripts/validate-package.sh build
+        (cd build && cpack)
+
+  backend-ui:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: npm
+        cache-dependency-path: |
+          ui/package-lock.json
+          launcher/package-lock.json
+    - run: python -m pip install -r backend/requirements-dev.txt
+    - name: Backend unit, API and WebSocket contracts
+      run: python -m pytest backend/ -q
+    - name: Build dashboard and install launcher
+      run: |
+        npm ci --prefix ui
+        npm run build --prefix ui
+        npm ci --prefix launcher
+    - name: Functional launcher integration
+      run: node tests/integration/integration.test.js
+    - name: Verify integration runner rejects startup failure
+      run: |
+        broken_path=$(mktemp -d)
+        ln -s "$(command -v node)" "$broken_path/node"
+        if PATH="$broken_path" node tests/integration/integration.test.js; then
+          echo 'ERROR: integration runner accepted failed startup'
+          exit 1
+        fi
 
   # Code coverage
   coverage:
@@ -147,7 +197,7 @@ jobs:
       working-directory: build
       run: |
         echo "=== Running CTest ==="
-        ctest --output-on-failure --verbose || echo "CTest failed or no tests available"
+        ctest --no-tests=error --output-on-failure --verbose
     
     - name: Verify coverage files exist
       run: |
@@ -171,7 +221,7 @@ jobs:
         lcov --list coverage.info
     
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v5
       with:
         files: ./coverage.info
         flags: unittests
@@ -240,7 +290,6 @@ jobs:
       run: |
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Debug \
-          -DENABLE_SANITIZERS=ON \
           -DCMAKE_CXX_FLAGS="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer"
     
     - name: Build
@@ -248,10 +297,10 @@ jobs:
     
     - name: Run tests
       working-directory: build
-      run: ctest --output-on-failure
+      run: ctest --no-tests=error --output-on-failure
       env:
         ASAN_OPTIONS: detect_leaks=1
-        UBSAN_OPTIONS: print_stacktrace=1
+        UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
 
   # Benchmark
   benchmark:
@@ -296,6 +345,8 @@ jobs:
 
   # Documentation
   documentation:
+    permissions:
+      contents: write
     runs-on: ubuntu-22.04
     if: github.ref == 'refs/heads/main'
     
@@ -310,18 +361,25 @@ jobs:
       run: |
         doxygen Doxyfile || echo "Doxyfile not found, skipping"
     
+    - name: Check generated documentation
+      id: docs
+      run: |
+        if [ -f docs/html/index.html ]; then echo "exists=true" >> "$GITHUB_OUTPUT"; fi
+
     - name: Deploy to GitHub Pages
-      if: github.event_name == 'push'
-      uses: peaceiris/actions-gh-pages@v3
+      if: steps.docs.outputs.exists == 'true' && github.event_name == 'push'
+      uses: peaceiris/actions-gh-pages@v4
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./docs/html
 
   # Docker build
   docker:
+    needs: [build-test, minimal-build, backend-ui, coverage, sanitizers]
     runs-on: ubuntu-22.04
     env:
-      DOCKER_TAG: ${{ replace(github.ref_name, '/', '-') }}
+      DOCKER_TAG: ${{ github.sha }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
     
     steps:
     - name: Checkout code
@@ -331,7 +389,7 @@ jobs:
       uses: docker/setup-buildx-action@v3
     
     - name: Login to Docker Hub
-      if: github.event_name == 'release' && secrets.DOCKER_PASSWORD != ''
+      if: github.event_name == 'release' && env.DOCKER_PASSWORD != ''
       uses: docker/login-action@v3
       with:
         username: dfeen87
@@ -341,7 +399,8 @@ jobs:
       uses: docker/build-push-action@v6
       with:
         context: .
-        push: ${{ github.event_name == 'release' }}
+        file: docker/Dockerfile
+        push: ${{ github.event_name == 'release' && env.DOCKER_PASSWORD != '' }}
         tags: |
           dfeen87/apm-system:latest
           dfeen87/apm-system:${{ env.DOCKER_TAG }}
@@ -350,8 +409,10 @@ jobs:
 
   # Release
   release:
+    permissions:
+      contents: write
     if: github.event_name == 'release'
-    needs: [build-test, coverage, static-analysis, sanitizers]
+    needs: [build-test, minimal-build, backend-ui, coverage, static-analysis, sanitizers]
     runs-on: ubuntu-22.04
     
     steps:
@@ -365,8 +426,9 @@ jobs:
     
     - name: Build release
       run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
         cmake --build build -j$(nproc)
+        bash scripts/validate-package.sh build
         cd build && cpack
     
     - name: Upload release artifacts

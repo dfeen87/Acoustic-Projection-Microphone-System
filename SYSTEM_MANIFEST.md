@@ -99,18 +99,22 @@ for contributors, CI, Docker, and automated tooling.
 - **CI validation**
   - All Core Engine directories
   - `tests/`
+- `backend/` (pytest, including API and WebSocket tests)
+- `ui/` and `launcher/` (build and functional integration tests)
   - `.github/`
 
 - **Docker builds**
   - Core Engine directories only
   - `docker/`
+- `backend/` and its pinned requirements for the existing optional API runtime
   - Explicitly excludes UI, frontend, and test sources
 
 ---
 
 ## Build Contract
 
-- Docker builds depend **only** on the Core Engine and minimal runtime artifacts.
+- Docker's native build depends on the Core Engine and minimal build artifacts.
+  The runtime also packages the Python API, as specified in `docker/Dockerfile`.
 - UI and frontend assets are explicitly excluded from Docker engine builds.
 - Tests are required for CI but are not part of runtime or deployment images.
 - CI validates each layer independently to prevent cross-layer regressions.

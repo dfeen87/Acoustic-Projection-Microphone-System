@@ -124,6 +124,6 @@ The Smartglasses Acoustic-Projection-Microphone-System (A-P-M-S) provides ultra-
 
 ## Status
 
-This architecture reflects the current stable direction of the project as of **v10.1.0** and is expected to evolve conservatively.
+This architecture reflects the current stable direction of the project as of **v11.0.0** and is expected to evolve conservatively.
 
 

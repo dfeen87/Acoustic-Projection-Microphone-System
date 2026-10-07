@@ -12,6 +12,7 @@
 #include <cstring>
 #include <cmath>
 #include <algorithm>
+#include <stdexcept>
 
 namespace apm {
 
@@ -44,7 +45,9 @@ class AudioDevice::Impl {
         // For this wiring phase, we use vectors to match the API.
 
         // Input vector (interleaved)
-        std::vector<float> input_vec(in, in + frames * in_channels);
+        if (!out) return paAbort;
+        std::vector<float> input_vec(static_cast<size_t>(frames) * in_channels, 0.0f);
+        if (in) std::copy_n(in, input_vec.size(), input_vec.begin());
 
         // Output vector (interleaved) - resized to expected size
         std::vector<float> output_vec(frames * out_channels, 0.0f);
@@ -52,7 +55,12 @@ class AudioDevice::Impl {
         {
             std::unique_lock<std::mutex> lock(self->callback_mutex_, std::try_to_lock);
             if (lock.owns_lock() && self->callback_) {
-                self->callback_(input_vec, output_vec);
+                try {
+                    self->callback_(input_vec, output_vec);
+                } catch (...) {
+                    // Exceptions must never escape the C audio callback.
+                    std::fill(output_vec.begin(), output_vec.end(), 0.0f);
+                }
             } else {
                 // If locked (contention) or no callback, silence output
                 std::fill(output_vec.begin(), output_vec.end(), 0.0f);
@@ -95,7 +103,7 @@ public:
                                 ? Pa_GetDefaultInputDevice()
                                 : config_.input_device_index;
 
-        if (inputParameters.device == paNoDevice) {
+        if (inputParameters.device == paNoDevice || !Pa_GetDeviceInfo(inputParameters.device)) {
              std::cerr << "Error: No default input device." << std::endl;
              return false;
         }
@@ -110,7 +118,7 @@ public:
                                  ? Pa_GetDefaultOutputDevice()
                                  : config_.output_device_index;
 
-        if (outputParameters.device == paNoDevice) {
+        if (outputParameters.device == paNoDevice || !Pa_GetDeviceInfo(outputParameters.device)) {
              std::cerr << "Error: No default output device." << std::endl;
              return false;
         }
@@ -200,11 +208,11 @@ class AudioDevice::Impl {
 public:
     explicit Impl(const Config&) {}
     bool start() {
-        std::cerr << "PortAudio not compiled in. Using dummy audio device." << std::endl;
-        return true;
+        std::cerr << "PortAudio not compiled in. Audio capture unavailable." << std::endl;
+        return false;
     }
     bool stop() { return true; }
-    bool is_active() const { return true; }
+    bool is_active() const { return false; }
     void set_callback(AudioCallback) {}
     static std::string list_devices() { return "No PortAudio support."; }
 };
@@ -212,8 +220,13 @@ public:
 #endif
 
 // Forwarding methods
-AudioDevice::AudioDevice(const Config& config)
-    : impl_(std::make_unique<Impl>(config)) {}
+AudioDevice::AudioDevice(const Config& config) {
+    if (config.sample_rate <= 0 || config.input_channels <= 0 || config.output_channels <= 0
+            || config.frames_per_buffer <= 0 || config.input_device_index < -1 || config.output_device_index < -1) {
+        throw std::invalid_argument("Invalid audio device configuration");
+    }
+    impl_ = std::make_unique<Impl>(config);
+}
 
 AudioDevice::~AudioDevice() = default;
 

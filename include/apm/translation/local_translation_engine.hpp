@@ -15,8 +15,8 @@ struct TranslationResult {
     std::string translated_text;      // Translated text
     std::string source_language;      // Detected/specified source language
     std::string target_language;      // Target language
-    float confidence;                 // Confidence score (0.0-1.0)
-    bool success;                     // Operation success flag
+    float confidence{0.0f};           // Confidence score (0.0-1.0)
+    bool success{false};              // Operation success flag
     std::string error_message;        // Error details if failed
 };
 
@@ -50,7 +50,7 @@ public:
         const std::vector<float>& audio_samples,
         int sample_rate);
 
-    // Check if models are loaded
+    // Check bridge/runtime availability; this does not verify model weights.
     bool is_ready() const { return ready_; }
 
     // Get supported languages

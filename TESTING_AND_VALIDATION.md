@@ -1,6 +1,16 @@
 # Testing and Validation Report
 
 ## Overview
+
+**Current baseline: 11.0.0, 2026-10-07.** The
+[BEDROCK engineering report](docs/releases/v11.0.0-bedrock.md#17-tests-executed-and-exact-results)
+records the current executable matrix: Debug 8/8, optional-library Release 8/8,
+minimal Release 7/7, ASan/UBSan 7/7, ThreadSanitizer 7/7, backend 54 passed, launcher 9 passed,
+negative startup rejection, installed SDK consumption and TGZ packaging.
+Docker execution, real inference and target hardware validation remain limited
+as described there. The report below is the historical February validation;
+its test counts and setup commands are not the current release's evidence.
+
 This document details the testing and validation steps performed on the APM System to ensure its reliability and functionality. The system comprises a C++ high-performance DSP backend, a Python FastAPI control plane, and a React-based UI.
 
 **Last validated**: 2026-02-21  

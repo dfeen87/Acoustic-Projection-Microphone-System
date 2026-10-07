@@ -1,5 +1,11 @@
 # REST API with Global Node Access - Implementation Summary
 
+Historical implementation summary. Its security and production-readiness claims
+are not current validation evidence. Version 11.0.0 has opt-in API-key and
+WebSocket-token enforcement, revised session contracts and explicit deployment
+limits; see the [BEDROCK engineering report](releases/v11.0.0-bedrock.md) and
+[backend configuration](../backend/README.md).
+
 ## Overview
 
 Successfully implemented a REST API with global node access for the Acoustic Projection Microphone System. The API enables peer discovery and session management across all nodes in the network.

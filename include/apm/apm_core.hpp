@@ -43,7 +43,7 @@ public:
 
     /**
      * @brief Get the APM library version string.
-     * @return Version string (e.g. "10.1.0")
+     * @return Version string (e.g. "11.0.0")
      */
     std::string get_version() const;
 
@@ -108,10 +108,11 @@ public:
      * @brief Process an audio buffer.
      *
      * Applies lightweight DC offset removal and peak limiting.
-     * This function is real-time safe and does not allocate internally
-     * once initialized.
+     * Returns a newly allocated output vector. Serialize calls on an instance
+     * so the per-channel filter history has a deterministic order.
      *
-     * @param input Interleaved mono audio samples
+     * @param input Interleaved normalized PCM; nonfinite samples become silence
+     * and finite overload is clamped before updating recursive state.
      * @return Processed audio samples
      */
     std::vector<float> process(const std::vector<float>& input);

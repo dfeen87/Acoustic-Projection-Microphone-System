@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
-project(AcousticProjectionMicrophone VERSION 10.1.0 LANGUAGES CXX)
+project(AcousticProjectionMicrophone VERSION 11.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -44,7 +44,7 @@ endif()
 find_library(TFLITE_LIBRARY NAMES tensorflowlite tensorflow-lite)
 find_path(TFLITE_INCLUDE_DIR NAMES tensorflow/lite/interpreter.h)
 
-if(TFLITE_LIBRARY AND TFLITE_INCLUDE_DIR)
+if(ENABLE_TFLITE AND TFLITE_LIBRARY AND TFLITE_INCLUDE_DIR)
     set(HAVE_TFLITE ON)
 else()
     set(HAVE_TFLITE OFF)
@@ -70,6 +70,10 @@ endif()
 # PortAudio
 find_package(PkgConfig)
 pkg_check_modules(PORTAUDIO portaudio-2.0)
+if(PORTAUDIO_FOUND)
+    # pkg-config's resolved paths also work for non-system dependency prefixes.
+    set(PORTAUDIO_LIBRARIES ${PORTAUDIO_LINK_LIBRARIES})
+endif()
 
 if(NOT PORTAUDIO_FOUND)
     find_library(PORTAUDIO_LIBRARY NAMES portaudio)
@@ -87,6 +91,9 @@ else()
     message(WARNING "PortAudio not found - Real Audio I/O disabled")
     message(WARNING "Install: apt-get install portaudio19-dev (Ubuntu) or brew install portaudio (macOS)")
 endif()
+
+set(HAVE_LOCAL_TRANSLATION ${ENABLE_LOCAL_TRANSLATION})
+set(HAVE_PORTAUDIO ${PORTAUDIO_FOUND})
 
 # Generate config header
 configure_file(
@@ -125,6 +132,21 @@ if(HAVE_ENCRYPTION)
 endif()
 
 add_library(apm_core STATIC ${APM_CORE_SOURCES})
+target_compile_features(apm_core PUBLIC cxx_std_20)
+if(ENABLE_LOCAL_TRANSLATION)
+    find_package(nlohmann_json 3.11 QUIET)
+    if(NOT nlohmann_json_FOUND)
+        include(FetchContent)
+        set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
+        set(JSON_Install OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(nlohmann_json
+            URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+            URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d)
+        FetchContent_MakeAvailable(nlohmann_json)
+    endif()
+    # JSON types stay behind the translation implementation boundary.
+    target_link_libraries(apm_core PRIVATE $<BUILD_INTERFACE:nlohmann_json::nlohmann_json>)
+endif()
 
 # Compiler warnings
 if(MSVC)
@@ -248,6 +270,16 @@ if(APM_ENABLE_TESTS)
     endif()
 
     # Core functionality tests
+    add_executable(bedrock_test tests/test_bedrock.cpp)
+    target_link_libraries(bedrock_test PRIVATE apm_core GTest::gtest_main)
+    add_test(NAME bedrock_test COMMAND bedrock_test)
+    set_tests_properties(bedrock_test PROPERTIES TIMEOUT 30)
+    if(NOT PORTAUDIO_FOUND)
+        add_test(NAME audio_dependency_unavailable COMMAND apm_backend)
+        set_tests_properties(audio_dependency_unavailable PROPERTIES
+            WILL_FAIL TRUE TIMEOUT 10)
+    endif()
+
     add_executable(apm_test tests/test_apm_core.cpp)
     target_link_libraries(apm_test PRIVATE apm_core GTest::gtest_main)
     add_test(NAME apm_core_test COMMAND apm_test)
@@ -288,6 +320,8 @@ if(APM_ENABLE_TESTS)
         add_executable(test_translation tests/integration/test_translation_integration.cpp)
         target_link_libraries(test_translation PRIVATE apm_core Threads::Threads)
         add_test(NAME translation_integration_test COMMAND test_translation)
+        set_tests_properties(translation_integration_test PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
     endif()
 
     # PTT + Call Signaling tests
@@ -297,6 +331,19 @@ if(APM_ENABLE_TESTS)
         add_test(NAME ptt_signaling_test COMMAND ptt_signaling_test)
     endif()
 
+    # Release test binaries must retain C/C++ assertions used by the bridge
+    # runner; NDEBUG belongs to optimized production targets only.
+    foreach(test_target bedrock_test apm_test apm_features_test smartglasses_apm_test
+            smartglasses_apm_projection_test smartglasses_apm_dsp_pipeline_test
+            crypto_test test_translation ptt_signaling_test)
+        if(TARGET ${test_target})
+            if(MSVC)
+                target_compile_options(${test_target} PRIVATE /UNDEBUG)
+            else()
+                target_compile_options(${test_target} PRIVATE -UNDEBUG)
+            endif()
+        endif()
+    endforeach()
     message(STATUS "Testing enabled")
 endif()
 
@@ -340,6 +387,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/apm/config.h
 
 # Install Python translation bridge and setup scripts
 if(ENABLE_LOCAL_TRANSLATION)
+    install(FILES docs/licenses/nlohmann-json.txt DESTINATION share/doc/apm/licenses)
     install(FILES 
         scripts/translation_bridge.py
         DESTINATION share/apm/scripts
@@ -349,7 +397,7 @@ if(ENABLE_LOCAL_TRANSLATION)
     )
     
     install(FILES 
-        scripts/setup_translation.sh
+        scripts/setup.sh
         DESTINATION share/apm/scripts
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE 
                     GROUP_READ GROUP_EXECUTE 
@@ -357,8 +405,8 @@ if(ENABLE_LOCAL_TRANSLATION)
     )
     
     # Install requirements file if it exists
-    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/requirements-translation.txt)
-        install(FILES requirements-translation.txt
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/config/requirements-translation.txt)
+        install(FILES config/requirements-translation.txt
             DESTINATION share/apm/
         )
     endif()
@@ -370,6 +418,8 @@ endif()
 install(FILES 
     README.md
     LICENSE
+    CHANGELOG.md
+    docs/releases/v11.0.0-bedrock.md
     DESTINATION share/doc/apm
 )
 
@@ -426,6 +476,12 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cmake/APMConfig.cmake.in)
     
     message(STATUS "Package configuration will be installed")
 endif()
+
+# Reuse the install rules for release archives.
+set(CPACK_PACKAGE_NAME "apm")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_GENERATOR "TGZ")
+include(CPack)
 
 # ============================================================================
 # CONFIGURATION SUMMARY

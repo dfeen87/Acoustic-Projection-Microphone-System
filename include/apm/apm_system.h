@@ -9,6 +9,7 @@
 #include <numeric>
 #include <algorithm>
 #include <deque>
+#include <mutex>
 
 namespace apm {
 
@@ -373,6 +374,7 @@ private:
 
     MonitoringMetrics current_metrics_;
     mutable std::mutex metrics_mutex_;
+    std::mutex pipeline_mutex_;
 
 public:
     // ✅ Remove invalid default argument

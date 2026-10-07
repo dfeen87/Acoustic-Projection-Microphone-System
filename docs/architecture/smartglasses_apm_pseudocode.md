@@ -1,6 +1,6 @@
 # Smartglasses A-P-M-S Pseudocode & Algorithm Specification
 
-**Version:** 10.1.0 (V10)
+**Version:** 11.0.0 (V10 architecture preserved)
 **Status:** Reference Engineering Specification
 **Module Target:** `src/dsp/smartglasses_apm/smartglasses_apm.cpp` / `include/apm/smartglasses_apm.hpp`
 

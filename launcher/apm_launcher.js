@@ -15,12 +15,9 @@ const CONFIG = {
   MAX_RETRIES: 3,
   // Updated to launch Python backend which provides the API
   BACKEND_EXECUTABLE: process.platform === "win32" ? "python" : "python3",
-  BACKEND_ARGS: ["backend/main.py"],
-  UI_HTML_PATHS: [
-    path.join(__dirname, "../ui/index.html"),
-    path.join(__dirname, "../apm-dashboard.html"),
-    path.join(__dirname, "../ui/apm-dashboard.html")
-  ]
+  BACKEND_ARGS: ["backend/main.py", "--host", "127.0.0.1"],
+  UI_HTML_PATHS: [path.join(__dirname, "../ui/dist/index.html")]
+
 };
 
 // State management
@@ -73,7 +70,7 @@ function validateEnvironment() {
   const uiPath = CONFIG.UI_HTML_PATHS.find((candidate) => fs.existsSync(candidate));
   if (!uiPath) {
     throw new Error(
-      `UI file not found. Checked:\n  - ${CONFIG.UI_HTML_PATHS.join("\n  - ")}`
+      `Built UI not found. Run npm ci and npm run build in ui/. Checked:\n  - ${CONFIG.UI_HTML_PATHS.join("\n  - ")}`
     );
   }
 
@@ -235,26 +232,29 @@ function startUiServer() {
       res.setHeader("X-Frame-Options", "DENY");
       res.setHeader("X-XSS-Protection", "1; mode=block");
 
-      // Only serve the main HTML file
-      if (req.url === "/" || req.url === "/index.html") {
-        fs.readFile(CONFIG.UI_HTML_PATH, (err, data) => {
-          if (err) {
-            logger.error(`Failed to read UI file: ${err.message}`);
-            res.statusCode = 500;
-            res.setHeader("Content-Type", "text/plain");
-            return res.end("Internal Server Error: Unable to load UI");
-          }
-
-          res.statusCode = 200;
-          res.setHeader("Content-Type", "text/html; charset=utf-8");
-          res.end(data);
-        });
-      } else {
-        // 404 for all other paths
-        res.statusCode = 404;
-        res.setHeader("Content-Type", "text/plain");
-        res.end("Not Found");
+      // Forward the built dashboard, assets and API to their existing owner.
+      // Keep this listener thin: never expose arbitrary filesystem paths.
+      const urlPath = req.url.split("?", 1)[0];
+      if (!(urlPath === "/" || urlPath === "/index.html" || urlPath === "/health" ||
+          urlPath.startsWith("/assets/") || urlPath.startsWith("/api/"))) {
+        res.writeHead(404, { "Content-Type": "text/plain" });
+        return res.end("Not Found");
       }
+      const upstream = http.request({
+        hostname: "127.0.0.1", port: CONFIG.BACKEND_PORT,
+        path: req.url, method: req.method, headers: req.headers,
+      }, (backendResponse) => {
+        res.writeHead(backendResponse.statusCode, backendResponse.headers);
+        backendResponse.pipe(res);
+      });
+      upstream.setTimeout(5000, () => upstream.destroy(new Error("Backend timeout")));
+      upstream.on("error", () => {
+        if (!res.headersSent) res.writeHead(502, { "Content-Type": "text/plain" });
+        res.end("Backend unavailable");
+      });
+      req.on("aborted", () => upstream.destroy());
+      req.pipe(upstream);
+
     });
 
     server.on("error", (err) => {
@@ -308,13 +308,13 @@ function gracefulShutdown(exitCode = 0) {
   }
 
   // Stop backend process
-  if (state.backendProcess && !state.backendProcess.killed) {
+  if (state.backendProcess && state.backendProcess.exitCode === null && state.backendProcess.signalCode === null) {
     logger.info("Sending SIGTERM to backend...");
     state.backendProcess.kill("SIGTERM");
 
     // Force kill after 5 seconds
     setTimeout(() => {
-      if (state.backendProcess && !state.backendProcess.killed) {
+      if (state.backendProcess && state.backendProcess.exitCode === null && state.backendProcess.signalCode === null) {
         logger.warn("Backend did not exit gracefully, forcing SIGKILL");
         state.backendProcess.kill("SIGKILL");
       }

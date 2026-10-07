@@ -201,14 +201,15 @@ std::string APMCore::get_version() const {
 
 bool APMCore::initialize(int sample_rate, int num_channels) {
     if (sample_rate <= 0 || num_channels <= 0) {
-        initialized_ = false;
         return false;
     }
 
+    std::vector<float> new_input(num_channels, 0.0f);
+    std::vector<float> new_output(num_channels, 0.0f);
     sample_rate_ = sample_rate;
     num_channels_ = num_channels;
-    dc_prev_input_.assign(num_channels_, 0.0f);
-    dc_prev_output_.assign(num_channels_, 0.0f);
+    dc_prev_input_.swap(new_input);
+    dc_prev_output_.swap(new_output);
     initialized_ = true;
     return true;
 }
@@ -255,6 +256,9 @@ std::vector<float> APMCore::process(const std::vector<float>& input) {
             if (!std::isfinite(x)) {
                 x = 0.0f;
             }
+            // PCM samples are normalized; bound overload before it can
+            // overflow the recursive state, rather than only at the output.
+            x = std::clamp(x, -1.0f, 1.0f);
 
             float y = x - prev_x + dc_filter_coeff_ * prev_y;
             prev_x = x;
@@ -282,7 +286,9 @@ APMCore::TextTranslationResult APMCore::translate_text(
     const auto start = std::chrono::steady_clock::now();
 
     const std::string trimmed = trim_copy(text);
-    if (trimmed.empty()) {
+    if (!initialized_) {
+        result.error_message = "APM core is not initialized";
+    } else if (trimmed.empty()) {
         result.success = false;
         result.error_message = "Input text is empty";
     } else if (source_language_ == target_language_) {

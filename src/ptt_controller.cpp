@@ -37,6 +37,7 @@ void PTTController::shutdown() {
     std::thread to_join;
     {
         std::lock_guard<std::mutex> lock(state_mutex_);
+        state_.store(State::IDLE);
         if (!thread_joined_ && state_thread_.joinable()) {
             thread_joined_ = true;
             to_join = std::move(state_thread_);

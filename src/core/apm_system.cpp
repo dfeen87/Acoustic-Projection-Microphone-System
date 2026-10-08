@@ -547,7 +547,11 @@ DirectionalProjector::DirectionalProjector(
     int speakers,
     float spacing)
     : speaker_array_size_(speakers),
-      spacing_m_(spacing) {}
+      spacing_m_(spacing) {
+    if (speakers <= 0 || !std::isfinite(spacing) || spacing < 0) {
+        throw std::invalid_argument("Invalid speaker array configuration");
+    }
+}
 
 std::vector<AudioFrame>
 DirectionalProjector::create_projection_signals(
@@ -556,24 +560,24 @@ DirectionalProjector::create_projection_signals(
     float target_distance_m) {
 
     std::vector<AudioFrame> speaker_signals;
+    if (!std::isfinite(target_azimuth_rad) || !std::isfinite(target_distance_m)
+            || target_distance_m < 0) return speaker_signals;
 
     for (int sp = 0; sp < speaker_array_size_; ++sp) {
         AudioFrame signal = source;
         auto samples = signal.samples();
 
-        float pos = sp * spacing_m_;
-        float delay_sec =
-            (pos * std::sin(target_azimuth_rad)) /
-            speed_of_sound_;
+        // Finite float geometry can still overflow float intermediate values.
+        // Bound the floating-point delay before converting it to an index.
+        const double delay_samples =
+            (static_cast<double>(sp) * spacing_m_ * std::sin(target_azimuth_rad)
+             / speed_of_sound_) * source.sample_rate();
 
-        int delay_samples =
-            static_cast<int>(delay_sec * source.sample_rate());
-
-        if (delay_samples > 0 &&
-            delay_samples < static_cast<int>(samples.size())) {
+        if (delay_samples >= 1.0 && delay_samples < static_cast<double>(samples.size())) {
+            const auto delay_index = static_cast<std::ptrdiff_t>(delay_samples);
 
             std::rotate(samples.begin(),
-                        samples.begin() + delay_samples,
+                        samples.begin() + delay_index,
                         samples.end());
         }
 

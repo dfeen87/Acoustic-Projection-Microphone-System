@@ -240,9 +240,16 @@ function startUiServer() {
         res.writeHead(404, { "Content-Type": "text/plain" });
         return res.end("Not Found");
       }
+      const headers = { ...req.headers };
+      // Uvicorn trusts this loopback proxy. Derive provenance from the client
+      // socket instead of passing headers supplied by that client as evidence.
+      delete headers["forwarded"];
+      delete headers["x-real-ip"];
+      headers["x-forwarded-for"] = req.socket.remoteAddress;
+      headers["x-forwarded-proto"] = "http";
       const upstream = http.request({
         hostname: "127.0.0.1", port: CONFIG.BACKEND_PORT,
-        path: req.url, method: req.method, headers: req.headers,
+        path: req.url, method: req.method, headers,
       }, (backendResponse) => {
         res.writeHead(backendResponse.statusCode, backendResponse.headers);
         backendResponse.pipe(res);

@@ -4,6 +4,7 @@ import logging
 import os
 import time
 import math
+from backend import json_contract
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ class TelemetryClient:
                         break  # Connection closed by server
 
                     try:
-                        record = _validated_metrics(json.loads(line.decode("utf-8")))
+                        record = _validated_metrics(json_contract.loads(line.decode("utf-8")))
                         # Validate the entire record before replacing valid evidence.
                         cached_metrics.update(record, _updated_at=time.monotonic(), _offline=False)
                     except json.JSONDecodeError:

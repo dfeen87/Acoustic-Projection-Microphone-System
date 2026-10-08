@@ -13,13 +13,14 @@ from typing import Literal
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
 from backend.storage import Storage
+from backend import json_contract
 from backend.telemetry import get_latest_metrics
 from backend.intent_engine import (
     intent_engine,
@@ -99,23 +100,26 @@ async def lifespan(app: FastAPI):
     local_peer = storage.ensure_local_peer()
     app.state.storage = storage
     app.state.local_peer_id = local_peer["id"]
-    app.state.stop_event = asyncio.Event()
-    app.state.housekeeper_task = asyncio.create_task(
-        session_housekeeper(storage, app.state.stop_event)
-    )
-
+    # Validate/construct dependencies before acquiring background resources.
     telemetry_client = getattr(app.state, "telemetry_client", None)
     if telemetry_client is None:
         from backend.telemetry import TelemetryClient
         telemetry_client = TelemetryClient()
         app.state.telemetry_client = telemetry_client
-    await telemetry_client.start()
-
-    yield
-    # ---------- shutdown ----------
-    app.state.stop_event.set()
-    await app.state.housekeeper_task
-    await telemetry_client.stop()
+    app.state.stop_event = asyncio.Event()
+    app.state.housekeeper_task = asyncio.create_task(
+        session_housekeeper(storage, app.state.stop_event)
+    )
+    try:
+        await telemetry_client.start()
+        yield
+    finally:
+        # Startup and application exceptions must release both services too.
+        app.state.stop_event.set()
+        try:
+            await app.state.housekeeper_task
+        finally:
+            await telemetry_client.stop()
 
 
 app = FastAPI(title="APM FastAPI Backend", version="11.0.0", lifespan=lifespan)
@@ -390,18 +394,21 @@ def translate_text(body: TranslateRequest):
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=45,
         )
     except subprocess.TimeoutExpired as exc:
         raise HTTPException(504, "Translation timed out") from exc
+    except UnicodeError as exc:
+        raise HTTPException(502, "Translation output decoding failed") from exc
     except subprocess.CalledProcessError as exc:
         stderr = (exc.stderr or "").strip()
         detail = stderr.splitlines()[-1] if stderr else "Translation failed"
         raise HTTPException(500, detail) from exc
 
     try:
-        payload = json.loads(completed.stdout)
-    except json.JSONDecodeError as exc:
+        payload = json_contract.loads(completed.stdout)
+    except ValueError as exc:
         raise HTTPException(502, "Translation output parsing failed") from exc
 
     if (not isinstance(payload, dict) or payload.get("success") is not True
@@ -445,7 +452,7 @@ def publish_session_translation(session_id: str, body: SessionTranslationCreate)
     return {"ok": True}
 
 @app.get("/api/session/{session_id}/translations")
-def get_session_translations(session_id: str, since_ms: float = 0):
+def get_session_translations(session_id: str, since_ms: float = Query(default=0, allow_inf_nan=False)):
     storage: Storage = app.state.storage
     if not storage.get_session(session_id):
         raise HTTPException(404, "Session not found")
@@ -477,7 +484,10 @@ def list_peers(request: Request):
 @app.post("/api/peers")
 def add_peer(body: PeerCreate):
     storage: Storage = app.state.storage
-    peer = storage.add_peer(body.name, body.ip)
+    try:
+        peer = storage.add_peer(body.name, body.ip)
+    except ValueError as exc:
+        raise HTTPException(503, str(exc)) from exc
     return {"ok": True, "peer": peer}
 
 @app.delete("/api/peers/{peer_id}")

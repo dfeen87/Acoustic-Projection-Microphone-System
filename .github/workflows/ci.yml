@@ -62,9 +62,11 @@ jobs:
           lcov
         
         if [ "${{ matrix.compiler }}" = "clang" ]; then
-          sudo apt-get install -y clang-14
-          echo "CC=clang-14" >> $GITHUB_ENV
-          echo "CXX=clang++-14" >> $GITHUB_ENV
+          clang_version=14
+          if [ "${{ matrix.os }}" = "ubuntu-24.04" ]; then clang_version=18; fi
+          sudo apt-get install -y "clang-$clang_version"
+          echo "CC=clang-$clang_version" >> $GITHUB_ENV
+          echo "CXX=clang++-$clang_version" >> $GITHUB_ENV
         else
           echo "CC=gcc" >> $GITHUB_ENV
           echo "CXX=g++" >> $GITHUB_ENV
@@ -76,6 +78,9 @@ jobs:
         brew install cmake ninja fftw libsodium portaudio
         echo "CC=clang" >> $GITHUB_ENV
         echo "CXX=clang++" >> $GITHUB_ENV
+
+    - name: Validate compiler and C++20 standard library
+      run: bash scripts/validate-toolchain.sh
     
     - name: Configure CMake
       run: |
@@ -83,7 +88,6 @@ jobs:
           -G Ninja \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
           -DBUILD_TESTING=ON \
-          -DBUILD_BENCHMARKS=ON \
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
     
     - name: Build
@@ -119,8 +123,11 @@ jobs:
         cmake --build build --parallel 2
         ctest --test-dir build --no-tests=error --output-on-failure
         build/apm_backend --version
+        python3 -O scripts/validate-test-policy.py build
         bash scripts/validate-package.sh build
         (cd build && cpack)
+    - name: Configure when pkg-config is unavailable
+      run: cmake -S . -B build-no-pkgconfig -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DENABLE_LOCAL_TRANSLATION=OFF -DENABLE_ENCRYPTION=OFF -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=ON
 
   backend-ui:
     runs-on: ubuntu-24.04
@@ -269,8 +276,16 @@ jobs:
   # Sanitizers
   sanitizers:
     strategy:
+      fail-fast: false
       matrix:
         sanitizer: [address, undefined, thread]
+        include:
+          - sanitizer: address
+            flags: -fsanitize=address
+          - sanitizer: undefined
+            flags: -fsanitize=undefined,float-cast-overflow
+          - sanitizer: thread
+            flags: -fsanitize=thread
     
     runs-on: ubuntu-22.04
     
@@ -290,7 +305,7 @@ jobs:
       run: |
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_CXX_FLAGS="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer"
+          -DCMAKE_CXX_FLAGS="${{ matrix.flags }} -fno-omit-frame-pointer"
     
     - name: Build
       run: cmake --build build -j$(nproc)
@@ -329,19 +344,16 @@ jobs:
       run: cmake --build build -j$(nproc)
     
     - name: Run benchmarks
-      working-directory: build
       run: |
-        if [ -f ./apm_bench ]; then
-          ./apm_bench --benchmark_format=json > benchmark-results.json
-        else
-          echo "Benchmark binary not found; skipping."
-        fi
+        python3 -O scripts/validate-test-policy.py build
+        ctest --test-dir build --no-tests=error -L performance --output-on-failure --parallel 1
     
     - name: Upload benchmark results
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: benchmark-results
-        path: build/benchmark-results.json
+        path: build/Testing/Temporary/LastTest.log
 
   # Documentation
   documentation:
@@ -374,8 +386,15 @@ jobs:
         publish_dir: ./docs/html
 
   # Docker build
+  docker-context:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+    - name: Verify Docker context excludes local secrets
+      run: bash scripts/validate-docker-context.sh
+
   docker:
-    needs: [build-test, minimal-build, backend-ui, coverage, sanitizers]
+    needs: [build-test, minimal-build, backend-ui, coverage, sanitizers, docker-context]
     runs-on: ubuntu-22.04
     env:
       DOCKER_TAG: ${{ github.sha }}
@@ -387,7 +406,7 @@ jobs:
     
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-    
+
     - name: Login to Docker Hub
       if: github.event_name == 'release' && env.DOCKER_PASSWORD != ''
       uses: docker/login-action@v3
@@ -400,12 +419,23 @@ jobs:
       with:
         context: .
         file: docker/Dockerfile
-        push: ${{ github.event_name == 'release' && env.DOCKER_PASSWORD != '' }}
+        load: true
+        push: false
         tags: |
+          apm-system:ci
           dfeen87/apm-system:latest
           dfeen87/apm-system:${{ env.DOCKER_TAG }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+
+    - name: Verify container API, authorization and persistence
+      run: bash scripts/validate-docker-runtime.sh apm-system:ci
+
+    - name: Publish validated release image
+      if: github.event_name == 'release' && env.DOCKER_PASSWORD != ''
+      run: |
+        docker push dfeen87/apm-system:latest
+        docker push "dfeen87/apm-system:$DOCKER_TAG"
 
   # Release
   release:

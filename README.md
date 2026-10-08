@@ -55,7 +55,7 @@ Production-grade implementation of an advanced acoustic projection microphone sy
 
 ## BEDROCK baseline: v11.0.0
 
-Version 11 preserves the DSP/control/UI architecture while enforcing validation, authentication, persistence and test-runner contracts. See [release notes and invariant map](docs/releases/v11.0.0-bedrock.md). API-key-enabled deployments require credentials in the dashboard Settings; loading the page does not grant API access. Software validation does not certify microphone hardware, acoustic output safety or model accuracy.
+Version 11 preserves the DSP/control/UI architecture while enforcing validation, authentication, persistence and test-runner contracts. See [release notes and invariant map](docs/releases/v11.0.0-bedrock.md) and the [Bedrock 1.1 adversarial verification and release gaps](docs/releases/v11.0.0-bedrock-1.1-pass-b.md). API-key-enabled deployments require credentials in the dashboard Settings; loading the page does not grant API access. Software validation does not certify microphone hardware, acoustic output safety or model accuracy.
 
 ## New in Version 10.0.0 (V10)
 
@@ -100,7 +100,8 @@ python3 scripts/translation_bridge.py audio.wav --source en --target es
 **Platform Notes**
 - Supported on Linux and macOS (Intel & Apple Silicon)
 - Text translation fallback uses portable `<cctype>` classification (no locale-dependent behavior) for cross-platform correctness
-- CI and Docker validate Linux builds; macOS builds are verified locally
+- CI covers Linux and macOS; local validation evidence and platform limits are
+  recorded in the release reports rather than implying every hosted job passed.
 
 ### Supported Languages
 
@@ -387,40 +388,29 @@ Acoustic-Projection-Microphone-System/
 ### Quick Start
 
 ```bash
-# Build the image
-docker build -t apm-system .
+# Build the existing API/native image
+docker build -f docker/Dockerfile -t apm-system:11.0.0 .
 
-# Run example
-docker run --rm apm-system
-
-# Development environment
-docker run -it --rm -v $(pwd):/workspace/apm apm-system:development
+# Set a deployment key in your environment before exposing protected APIs.
+: "${APM_API_KEY:?Set APM_API_KEY to your deployment key}"
+docker run --rm -p 127.0.0.1:8080:8080 \
+  -e APM_API_KEY -e APM_DB_PATH=/data/apm.sqlite \
+  -v apm-data:/data apm-system:11.0.0
 ```
 
 ### Production Deployment
 
-```dockerfile
-FROM node:18-alpine AS launcher
-WORKDIR /app
-COPY launcher/package*.json ./
-RUN npm ci --production
+The maintained Dockerfile starts the Python API and includes the native binary;
+it does not package the React dashboard, inference models or PortAudio capture.
+`/health` proves API liveness. Offline/fallback metrics are expected without a
+running native telemetry source and must not be interpreted as working audio.
+Provision TLS/ingress and credentials explicitly for network deployments.
 
-FROM gcc:11 AS backend
-WORKDIR /app
-COPY . .
-RUN cmake -B build -DCMAKE_BUILD_TYPE=Release && \
-    cmake --build build --config Release
-
-FROM node:18-alpine
-WORKDIR /app
-COPY --from=launcher /app/node_modules ./launcher/node_modules
-COPY --from=backend /app/build/apm_backend ./apm_backend
-COPY launcher/apm_launcher.js ./launcher/
-COPY ui/apm-dashboard.html ./ui/
-
-EXPOSE 8080 4173
-CMD ["node", "launcher/apm_launcher.js"]
-```
+`scripts/validate-docker-context.sh` checks that local credentials and database
+files are excluded before publishing an image. The runtime validation script
+checks API authentication and SQLite restart persistence; neither check certifies
+model quality or hardware behavior. See the release reports for the exact image
+build conditions, including proxy/CA limitations.
 
 ---
 
@@ -753,7 +743,7 @@ Contributions welcome! Please:
 - CPU: 2 cores
 - RAM: 512MB
 - Disk: 100MB
-- Node.js: 14.0.0+
+- Node.js: 18.0.0+ (the Vite 5 dashboard build requires Node 18 or later)
 - CMake: 3.18+
 
 ### Recommended
@@ -847,7 +837,7 @@ If you use this work in research, please cite:
 
 ---
 
-**Status**: Software baseline validated; target hardware validation required | **Version**: 11.0.0 | **Last Updated**: October 2026
+**Status**: Local software checks passed; hosted CI and delivery/hardware gaps are recorded in the Pass B report | **Version**: 11.0.0 | **Last Updated**: October 2026
 
 ## Enterprise Consulting & Integration
 This architecture is fully open-source under the MIT License. If your organization requires custom scaling, proprietary integration, or dedicated technical consulting to deploy these models at an enterprise level, please reach out at: dfeen87@gmail.com

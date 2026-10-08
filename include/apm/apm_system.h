@@ -200,8 +200,10 @@ class DirectionalProjector {
     float speed_of_sound_{343.0f};
 
 public:
+    // Speaker count must be positive; spacing must be finite and nonnegative.
     DirectionalProjector(int speakers, float spacing);
 
+    // Invalid directions or nonfinite/negative distances return no signals.
     std::vector<AudioFrame> create_projection_signals(
         const AudioFrame& source,
         float target_azimuth_rad,

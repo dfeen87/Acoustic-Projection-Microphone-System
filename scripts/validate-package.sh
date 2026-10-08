@@ -5,6 +5,11 @@ build_dir=${1:-"$repo/build"}
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 cmake --install "$build_dir" --prefix "$scratch/install"
+test_artifact=$(find "$scratch/install" \( -name gtest -o -name gmock -o -name GTest -o -name 'libgtest*' -o -name 'libgmock*' -o -name 'gtest*.pc' -o -name 'gmock*.pc' \) -print -quit)
+if [[ -n "$test_artifact" ]]; then
+    echo "ERROR: test-only GoogleTest artifacts leaked into the APM package: $test_artifact" >&2
+    exit 1
+fi
 mkdir "$scratch/consumer"
 cat > "$scratch/consumer/CMakeLists.txt" <<'CMAKE'
 cmake_minimum_required(VERSION 3.18)

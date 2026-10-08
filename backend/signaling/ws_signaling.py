@@ -7,6 +7,7 @@ import os
 import time
 import hmac
 import math
+from backend import json_contract
 
 
 logger = logging.getLogger(__name__)
@@ -83,6 +84,10 @@ class SignalingHub:
     async def relay(self, websocket: WebSocket, message: dict):
         if not isinstance(message, dict) or websocket not in self.peers:
             return
+        # Presence and acknowledgements are emitted only by this hub. A member
+        # cannot impersonate server state changes by supplying another peerId.
+        if message.get("type") in {"peer_joined", "peer_left", "joined", "pong"}:
+            return
         joined_room = next((room for room, sockets in self.rooms.items() if websocket in sockets), None)
         room_id = message.get("roomId", joined_room)
         if room_id != joined_room or joined_room is None:
@@ -151,8 +156,13 @@ async def signaling_ws(websocket: WebSocket):
 
     try:
         while True:
-            raw = await websocket.receive_text()
-            msg = json.loads(raw)
+            event = await websocket.receive()
+            if event["type"] == "websocket.disconnect":
+                raise WebSocketDisconnect(event.get("code", 1000))
+            raw = event.get("text")
+            if not isinstance(raw, str):
+                raise ValueError("Signaling requires JSON text frames")
+            msg = json_contract.loads(raw)
             if not isinstance(msg, dict) or not _identifier(msg.get("type")):
                 raise ValueError("Invalid signaling message")
             hub.touch(websocket)

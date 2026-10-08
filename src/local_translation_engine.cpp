@@ -14,10 +14,37 @@
 #include <filesystem>
 #include <algorithm>
 #include <cmath>
+#include <unordered_set>
+#include <cstdint>
 
 #include <nlohmann/json.hpp>
 
 namespace apm {
+
+namespace {
+bool contains_nonblank_json_text(const std::string& text) {
+    // The JSON parser has already validated UTF-8. Decode only to recognize
+    // the Unicode whitespace used by Python str.strip() at the same boundary.
+    for (size_t index = 0; index < text.size();) {
+        uint32_t codepoint = static_cast<unsigned char>(text[index++]);
+        if (codepoint >= 0x80) {
+            const unsigned length = codepoint < 0xe0 ? 2 : codepoint < 0xf0 ? 3 : 4;
+            codepoint &= length == 2 ? 0x1f : length == 3 ? 0x0f : 0x07;
+            for (unsigned byte = 1; byte < length; ++byte) {
+                codepoint = (codepoint << 6) | (static_cast<unsigned char>(text[index++]) & 0x3f);
+            }
+        }
+        const bool whitespace = (codepoint >= 0x09 && codepoint <= 0x0d)
+            || (codepoint >= 0x1c && codepoint <= 0x20)
+            || codepoint == 0x85 || codepoint == 0xa0 || codepoint == 0x1680
+            || (codepoint >= 0x2000 && codepoint <= 0x200a)
+            || (codepoint >= 0x2028 && codepoint <= 0x2029)
+            || codepoint == 0x202f || codepoint == 0x205f || codepoint == 0x3000;
+        if (!whitespace) return true;
+    }
+    return false;
+}
+} // namespace
 
 std::string shell_argument(const std::string& value) {
     if (value.find('\0') != std::string::npos) throw std::invalid_argument("NUL in translation argument");
@@ -70,7 +97,9 @@ bool write_wav_file(const std::string& filename,
 
     const int num_channels = 1;
     const int bits_per_sample = 16;
-    const int byte_rate = sample_rate * num_channels * bits_per_sample / 8;
+    // Divide the constant first: sample_rate * 16 can overflow even when
+    // the two-byte PCM rate fits the validated signed integer domain.
+    const int byte_rate = sample_rate * num_channels * (bits_per_sample / 8);
     const int block_align = num_channels * bits_per_sample / 8;
     const uint32_t data_size = static_cast<uint32_t>(raw_data_bytes);
     const uint32_t file_size = 36 + data_size;
@@ -199,7 +228,22 @@ public:
                 return result;
             }
 
-            const auto payload = nlohmann::json::parse(json_output);
+            // JSON objects with duplicate keys carry contradictory evidence.
+            // Reject them instead of letting a later success/text field win.
+            std::vector<std::unordered_set<std::string>> object_keys;
+            const auto payload = nlohmann::json::parse(json_output,
+                [&](int, nlohmann::json::parse_event_t event, nlohmann::json& value) {
+                    if (event == nlohmann::json::parse_event_t::object_start) {
+                        object_keys.emplace_back();
+                    } else if (event == nlohmann::json::parse_event_t::key) {
+                        if (!object_keys.back().insert(value.get<std::string>()).second) {
+                            throw std::invalid_argument("Duplicate translation response field");
+                        }
+                    } else if (event == nlohmann::json::parse_event_t::object_end) {
+                        object_keys.pop_back();
+                    }
+                    return true;
+                });
             if (!payload.is_object() || !payload.contains("success") || !payload["success"].is_boolean()
                     || !payload["success"].get<bool>() || !payload.contains("translated_text")
                     || !payload["translated_text"].is_string()) {
@@ -208,7 +252,7 @@ public:
             }
             result.transcribed_text = payload.value("transcribed_text", std::string{});
             result.translated_text = payload["translated_text"].get<std::string>();
-            result.success = result.translated_text.find_first_not_of(" \t\r\n") != std::string::npos;
+            result.success = contains_nonblank_json_text(result.translated_text);
 
             if (!result.success) {
                 result.error_message = "Translation failed - check if models are installed";

@@ -19,10 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SDK installation, version metadata and failure propagation in tests/builds.
 - Enforce native Debug/Release assertions, minimal builds, backend/WebSocket tests,
   launcher startup failure, SDK packaging and test-gated release/container workflows.
+- Bedrock 1.1 adversarial verification closes proxy identity spoofing, contradictory
+  JSON/Unicode evidence, exceptional startup cleanup, identity collision/rollback,
+  terminal-call rejection and native delay/WAV intermediate-overflow gaps.
+- Keep the existing DSP timing budgets in explicit serial Release checks; correct
+  compiler/standard-library pairing, build-only test dependency packaging and recursive
+  Docker secret exclusions. Validate API-container authorization and restart persistence.
 
 ### Added
 - Behavioral regressions and current-version consistency checks.
 - [Engineering report, compatibility changes and validation limits](docs/releases/v11.0.0-bedrock.md).
+- [Pass B regressions, independent evidence and V11 release-readiness assessment](docs/releases/v11.0.0-bedrock-1.1-pass-b.md).
 
 The major increment includes incompatible public state, validation and authentication
 contracts under the project's stated Semantic Versioning policy. It does not certify

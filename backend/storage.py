@@ -95,14 +95,24 @@ class Storage:
 
     def add_peer(self, name: str, ip: str) -> Dict[str, object]:
         peer = {
-            "id": "peer-" + uuid.uuid4().hex[:6],
             "name": name,
             "ip": ip,
             "status": "online",
             "last_seen": time.time()
         }
-        self.upsert_peer(peer)
-        return peer
+        # Adding an identity must never replace another peer after a generated
+        # ID collision. INSERT is authoritative across processes as well.
+        with self._db_lock, self._connect() as conn:
+            for _ in range(3):
+                peer["id"] = "peer-" + uuid.uuid4().hex[:6]
+                try:
+                    conn.execute("INSERT INTO peers (id, name, ip, status, last_seen) VALUES (?, ?, ?, ?, ?)",
+                                 (peer["id"], peer["name"], peer["ip"], peer["status"], peer["last_seen"]))
+                    return peer
+                except sqlite3.IntegrityError:
+                    if not conn.execute("SELECT 1 FROM peers WHERE id = ?", (peer["id"],)).fetchone():
+                        raise
+            raise ValueError("Could not allocate a unique peer identity")
 
     def delete_peer(self, peer_id: str) -> None:
         with self._db_lock:
@@ -229,6 +239,8 @@ class Storage:
                                   caller: Dict[str, object]) -> Dict[str, object]:
         with self._db_lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            if not conn.execute("SELECT 1 FROM peers WHERE id = ?", (local_id,)).fetchone():
+                raise ValueError("Local peer not found")
             existing = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
             if existing:
                 if existing["peer_id"] != local_id:

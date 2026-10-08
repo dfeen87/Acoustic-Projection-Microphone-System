@@ -233,6 +233,9 @@ bool CallSignaling::reject_call(const std::string& session_id) {
     }
 
     CallSession& session = it->second;
+    if (session.state != CallState::RINGING) {
+        return false;
+    }
     session.state = CallState::REJECTED;
     session.end_time = std::chrono::steady_clock::now();
 

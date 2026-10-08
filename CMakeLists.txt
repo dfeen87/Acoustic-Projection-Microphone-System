@@ -16,6 +16,18 @@ option(ENABLE_ENCRYPTION "Enable encryption support" ON)
 
 set(APM_ENABLE_TESTS ${BUILD_TESTING})
 
+# Wall-clock DSP budgets are meaningful only in an explicitly requested,
+# uninstrumented Release build. Ordinary correctness and sanitizer runs never
+# register performance checks.
+if(BUILD_BENCHMARKS)
+    if(NOT BUILD_TESTING OR NOT CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_CONFIGURATION_TYPES)
+        message(FATAL_ERROR "BUILD_BENCHMARKS requires BUILD_TESTING=ON and a single-configuration Release build")
+    endif()
+    if(ENABLE_COVERAGE OR "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE}" MATCHES "-fsanitize[= ]|/fsanitize")
+        message(FATAL_ERROR "BUILD_BENCHMARKS requires an uninstrumented build")
+    endif()
+endif()
+
 # Coverage support
 if(ENABLE_COVERAGE)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -69,7 +81,10 @@ endif()
 
 # PortAudio
 find_package(PkgConfig)
-pkg_check_modules(PORTAUDIO portaudio-2.0)
+set(PORTAUDIO_FOUND OFF)
+if(PkgConfig_FOUND)
+    pkg_check_modules(PORTAUDIO portaudio-2.0)
+endif()
 if(PORTAUDIO_FOUND)
     # pkg-config's resolved paths also work for non-system dependency prefixes.
     set(PORTAUDIO_LIBRARIES ${PORTAUDIO_LINK_LIBRARIES})
@@ -262,6 +277,8 @@ if(APM_ENABLE_TESTS)
     if(NOT GTest_FOUND)
         message(STATUS "GTest not found. Fetching googletest...")
         include(FetchContent)
+        # GoogleTest is build-only; SDK/TGZ installation must not ship it.
+        set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
         FetchContent_Declare(
             googletest
             URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
@@ -292,7 +309,8 @@ if(APM_ENABLE_TESTS)
     # Smartglasses APM Projection Engine tests
     add_executable(smartglasses_apm_test tests/test_smartglasses_apm.cpp)
     target_link_libraries(smartglasses_apm_test PRIVATE apm_core GTest::gtest_main)
-    add_test(NAME smartglasses_apm_test COMMAND smartglasses_apm_test)
+    add_test(NAME smartglasses_apm_test COMMAND smartglasses_apm_test
+        --gtest_filter=-SmartglassesApmTest.RealTimeFrameProcessingLatency)
 
     # Smartglasses APM Math Projection tests
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_smartglasses_apm_projection.cpp)
@@ -305,7 +323,23 @@ if(APM_ENABLE_TESTS)
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_smartglasses_apm_dsp_pipeline.cpp)
         add_executable(smartglasses_apm_dsp_pipeline_test tests/test_smartglasses_apm_dsp_pipeline.cpp)
         target_link_libraries(smartglasses_apm_dsp_pipeline_test PRIVATE apm_core GTest::gtest_main)
-        add_test(NAME smartglasses_apm_dsp_pipeline_test COMMAND smartglasses_apm_dsp_pipeline_test)
+        add_test(NAME smartglasses_apm_dsp_pipeline_test COMMAND smartglasses_apm_dsp_pipeline_test
+            --gtest_filter=-SmartglassesApmDspPipelineTest.Sub10msLatencyBenchmark)
+    endif()
+
+    if(BUILD_BENCHMARKS)
+        target_compile_definitions(smartglasses_apm_test PRIVATE APM_ENABLE_PERFORMANCE_TESTS=1)
+        add_test(NAME smartglasses_latency_test COMMAND smartglasses_apm_test
+            --gtest_filter=SmartglassesApmTest.RealTimeFrameProcessingLatency)
+        set_tests_properties(smartglasses_latency_test PROPERTIES
+            LABELS performance RUN_SERIAL TRUE TIMEOUT 30)
+        if(TARGET smartglasses_apm_dsp_pipeline_test)
+            target_compile_definitions(smartglasses_apm_dsp_pipeline_test PRIVATE APM_ENABLE_PERFORMANCE_TESTS=1)
+            add_test(NAME smartglasses_dsp_latency_test COMMAND smartglasses_apm_dsp_pipeline_test
+                --gtest_filter=SmartglassesApmDspPipelineTest.Sub10msLatencyBenchmark)
+            set_tests_properties(smartglasses_dsp_latency_test PROPERTIES
+                LABELS performance RUN_SERIAL TRUE TIMEOUT 30)
+        endif()
     endif()
 
     # Crypto tests
@@ -358,7 +392,7 @@ if(BUILD_BENCHMARKS)
         target_link_libraries(apm_bench PRIVATE apm_core)
         message(STATUS "Building benchmarks")
     else()
-        message(STATUS "Benchmarks enabled but no benchmark code found")
+        message(STATUS "CTest performance checks enabled; no standalone apm_bench target")
     endif()
 endif()
 
@@ -420,6 +454,7 @@ install(FILES
     LICENSE
     CHANGELOG.md
     docs/releases/v11.0.0-bedrock.md
+    docs/releases/v11.0.0-bedrock-1.1-pass-b.md
     DESTINATION share/doc/apm
 )
 

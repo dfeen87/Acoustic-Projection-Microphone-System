@@ -302,6 +302,21 @@ async function runTests() {
         throw new Error("Dashboard cannot process intent through its own origin");
       }
     });
+    await test("UI proxy cannot turn forwarded headers into client identity", async () => {
+      const baseline = await httpRequest({ hostname: "localhost", port: TEST_CONFIG.UI_PORT,
+        path: "/api/status", method: "GET" });
+      const forged = await httpRequest({ hostname: "localhost", port: TEST_CONFIG.UI_PORT,
+        path: "/api/status", method: "GET", headers: {
+          "X-Forwarded-For": "203.0.113.99",
+          "X-Forwarded-Proto": "https",
+          "Forwarded": "for=203.0.113.99;proto=https",
+          "X-Real-IP": "203.0.113.99",
+        } });
+      if (baseline.statusCode !== 200 || forged.statusCode !== 200 ||
+          JSON.parse(baseline.data).peer_id !== JSON.parse(forged.data).peer_id) {
+        throw new Error("Untrusted headers changed the dashboard's persisted client identity");
+      }
+    });
 
     // Load sanity (non-benchmark)
     // -------------------------------------------------------------------------

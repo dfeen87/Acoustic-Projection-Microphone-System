@@ -5,7 +5,7 @@
 **Current baseline: 11.0.0, Pass B validated 2026-10-08 UTC.** The
 [Bedrock 1.1 adversarial report](docs/releases/v11.0.0-bedrock-1.1-pass-b.md#validation-results)
 records Debug/full GCC and Clang Release 8/8, minimal Release and ASan/UBSan 7/7,
-full-feature Debug UBSan/ThreadSanitizer 8/8, backend 89 passed, launcher 10 passed,
+full-feature Debug UBSan/ThreadSanitizer 8/8, backend 89 passed at the original checkpoint, launcher 10 passed,
 API smoke 4 passed, and separate serial Release timing budgets 2/2. Negative startup,
 installed SDK consumption, uncontaminated TGZ and API-container authorization/restart
 checks passed. Four documented diagnostic regressions and the real launcher's 12 checks
@@ -16,6 +16,11 @@ with two expected skips and no failures, including all native platforms and Dock
 Installer payloads, real inference and target hardware retain explicit validation gaps
 in that report. The original
 [Pass A report](docs/releases/v11.0.0-bedrock.md) remains available.
+The final [signaling compatibility follow-up](docs/releases/v11.0.0-bedrock-1.1-pass-b.md#pre-merge-signaling-compatibility-follow-up)
+proves lobby rooms and call-session IDs are independent: signaling 32 passed,
+adversarial 35 passed and complete backend 113 passed, with API smoke, launcher,
+diagnostic and maintained UI build checks rerun. Earlier hosted runs are historical
+checkpoints; the follow-up commit requires its own CI result.
 The report below is the historical February validation;
 its test counts and setup commands are not the current release's evidence.
 

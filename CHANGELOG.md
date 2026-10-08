@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keep the existing DSP timing budgets in explicit serial Release checks; correct
   compiler/standard-library pairing, build-only test dependency packaging and recursive
   Docker secret exclusions. Validate API-container authorization and restart persistence.
+- Restore lobby-based WebRTC signaling with independent call-session identifiers;
+  validate session metadata while retaining joined-room isolation and server-derived
+  sender identity. Add endpoint regressions and reconcile the active signaling contracts.
 
 ### Added
 - Behavioral regressions and current-version consistency checks.

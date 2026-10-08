@@ -92,7 +92,8 @@ class SignalingHub:
         room_id = message.get("roomId", joined_room)
         if room_id != joined_room or joined_room is None:
             return
-        if "sessionId" in message and message["sessionId"] != joined_room:
+        # Call correlation is independent of room membership (e.g. apm-lobby).
+        if "sessionId" in message and not _identifier(message["sessionId"]):
             return
         # Membership owns provenance; caller data never supplies sender identity.
         payload = {**message, "fromPeerId": self.peers[websocket]}

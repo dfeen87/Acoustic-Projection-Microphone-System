@@ -5,10 +5,12 @@
 **Current baseline: 11.0.0, Pass B validated 2026-10-08 UTC.** The
 [Bedrock 1.1 adversarial report](docs/releases/v11.0.0-bedrock-1.1-pass-b.md#validation-results)
 records Debug/full GCC and Clang Release 8/8, minimal Release and ASan/UBSan 7/7,
-full-feature Debug UBSan/ThreadSanitizer 8/8, backend 87 passed, launcher 10 passed,
+full-feature Debug UBSan/ThreadSanitizer 8/8, backend 89 passed, launcher 10 passed,
 API smoke 4 passed, and separate serial Release timing budgets 2/2. Negative startup,
 installed SDK consumption, uncontaminated TGZ and API-container authorization/restart
-checks passed. The coverage build passes 7/7, but local GCC 14/LCOV trace consistency
+checks passed. Four documented diagnostic regressions and the real launcher's 12 checks
+passed; optimized standalone API smoke correctly rejects disabled assertions.
+The coverage build passes 7/7, but local GCC 14/LCOV trace consistency
 validation remains unresolved. Hosted CI, installer payloads, real inference and target
 hardware retain explicit validation gaps in that report. The original
 [Pass A report](docs/releases/v11.0.0-bedrock.md) remains available.

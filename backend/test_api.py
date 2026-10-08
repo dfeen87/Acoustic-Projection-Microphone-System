@@ -1,5 +1,6 @@
 """Behavioral API tests with an isolated database and real application lifespan."""
 import tempfile
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -51,6 +52,8 @@ def test_session_create(client):
 
 
 def main():
+    if sys.flags.optimize:
+        raise RuntimeError("Standalone API smoke requires enabled assertions; disable Python optimization")
     with tempfile.TemporaryDirectory() as directory, patch.object(
         api, "Storage", lambda: Storage(str(Path(directory) / "api.sqlite"))
     ), TestClient(api.app) as test_client:

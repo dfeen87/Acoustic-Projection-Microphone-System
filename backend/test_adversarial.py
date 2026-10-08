@@ -278,3 +278,24 @@ def test_translation_poll_cursor_must_be_finite(cursor, tmp_path, monkeypatch):
         session = storage.create_session(api.app.state.local_peer_id)
         response = client.get(f"/api/session/{session['id']}/translations", params={"since_ms": cursor})
         assert response.status_code == 422
+
+
+@pytest.mark.parametrize("optimization", ["flag", "environment"])
+def test_standalone_api_smoke_rejects_disabled_assertions(optimization):
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+    command = [sys.executable]
+    environment = os.environ.copy()
+    environment["APM_API_KEY"] = ""
+    if optimization == "flag":
+        command.append("-O")
+    else:
+        environment["PYTHONOPTIMIZE"] = "1"
+    command.extend(["-m", "backend.test_api"])
+    result = subprocess.run(command, cwd=Path(__file__).resolve().parents[1],
+                            env=environment, capture_output=True, text=True, timeout=20)
+    assert result.returncode != 0
+    assert "requires enabled assertions" in result.stderr
+    assert "4 API smoke tests passed" not in result.stdout

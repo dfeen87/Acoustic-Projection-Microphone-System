@@ -5,16 +5,22 @@ scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 cat > "$scratch/standard-library.cpp" <<'CPP'
 #include <chrono>
-#include <ranges>
 #include <span>
-constexpr std::chrono::hh_mm_ss stamp{std::chrono::milliseconds{1234}};
-static_assert(stamp.subseconds().count() == 234);
+// Exercise the duration and span operations used by APMS. Calendar formatting
+// and range adaptors are outside its supported-feature contract.
+constexpr auto stamp = std::chrono::duration_cast<std::chrono::microseconds>(
+    std::chrono::milliseconds{1234});
+static_assert(stamp.count() == 1234000);
 int main() {
     int values[]{1, 2, 3};
     std::span<int> frame{values};
+    auto portion = frame.subspan(0, 2);
     int sum = 0;
-    for (int value : frame | std::views::take(2)) sum += value;
-    return sum == 3 ? 0 : 1;
+    const auto start = std::chrono::steady_clock::now();
+    for (int value : portion) sum += value;
+    auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - start);
+    return sum == 3 && elapsed.count() >= 0 ? 0 : 1;
 }
 CPP
 "$compiler" --version

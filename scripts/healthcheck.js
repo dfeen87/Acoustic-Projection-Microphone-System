@@ -114,13 +114,11 @@ async function main() {
     if (!fs.existsSync(file)) throw new Error("File not found");
   })) results.passed++; else results.failed++;
 
-  if (checkSync("apm-dashboard.html exists", () => {
-    const candidates = [
-      path.join(rootDir, "apm-dashboard.html"),
-      path.join(rootDir, "ui", "apm-dashboard.html")
-    ];
-    const exists = candidates.some((candidate) => fs.existsSync(candidate));
-    if (!exists) throw new Error("File not found");
+  if (checkSync("Built dashboard (ui/dist/index.html) exists", () => {
+    const file = path.join(rootDir, "ui", "dist", "index.html");
+    if (!fs.existsSync(file)) {
+      throw new Error("Built UI not found. Run npm ci and npm run build in ui/");
+    }
   })) results.passed++; else results.failed++;
 
   if (checkSync("main.cpp exists", () => {

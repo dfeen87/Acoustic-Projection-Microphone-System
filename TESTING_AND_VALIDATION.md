@@ -20,7 +20,9 @@ The final [signaling compatibility follow-up](docs/releases/v11.0.0-bedrock-1.1-
 proves lobby rooms and call-session IDs are independent: signaling 32 passed,
 adversarial 35 passed and complete backend 113 passed, with API smoke, launcher,
 diagnostic and maintained UI build checks rerun. Earlier hosted runs are historical
-checkpoints; the follow-up commit requires its own CI result.
+checkpoints. The follow-up source commit `1d20334` passed its own
+[hosted run 37757515904](https://github.com/dfeen87/Acoustic-Projection-Microphone-System/actions/runs/37757515904):
+22 jobs passed, two expected skips and no failures, including Docker image/runtime.
 The report below is the historical February validation;
 its test counts and setup commands are not the current release's evidence.
 

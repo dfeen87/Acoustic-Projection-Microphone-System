@@ -11,8 +11,10 @@ installed SDK consumption, uncontaminated TGZ and API-container authorization/re
 checks passed. Four documented diagnostic regressions and the real launcher's 12 checks
 passed; optimized standalone API smoke correctly rejects disabled assertions.
 The coverage build passes 7/7, but local GCC 14/LCOV trace consistency
-validation remains unresolved. Hosted CI, installer payloads, real inference and target
-hardware retain explicit validation gaps in that report. The original
+validation remains unresolved. The corrected hosted run completed 22 jobs successfully
+with two expected skips and no failures, including all native platforms and Docker.
+Installer payloads, real inference and target hardware retain explicit validation gaps
+in that report. The original
 [Pass A report](docs/releases/v11.0.0-bedrock.md) remains available.
 The report below is the historical February validation;
 its test counts and setup commands are not the current release's evidence.

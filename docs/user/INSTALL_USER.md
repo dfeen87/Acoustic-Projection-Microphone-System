@@ -416,7 +416,7 @@ Settings → Updates → ☑ Automatically download updates
 Help → Check for Updates
 ```
 
-**Current Version**: 10.1.0
+**Current Version**: 11.0.0
 
 ---
 
@@ -458,5 +458,5 @@ Help → Check for Updates
 
 ---
 
-*Version 10.1.0 | Last Updated: September 2026*
+*Version 11.0.0 | Last Updated: October 2026*
 *Copyright © 2025 Don Michael Feeney Jr. | MIT License*

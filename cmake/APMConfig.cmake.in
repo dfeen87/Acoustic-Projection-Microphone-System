@@ -22,7 +22,7 @@ endif()
 
 # Provide variables
 set(APM_LIBRARIES APM::apm_core)
-set(APM_INCLUDE_DIRS "@PACKAGE_CMAKE_INSTALL_PREFIX@/include")
+set(APM_INCLUDE_DIRS "${PACKAGE_PREFIX_DIR}/include")
 set(APM_VERSION "@PROJECT_VERSION@")
 
 # Feature flags

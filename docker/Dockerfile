@@ -21,39 +21,11 @@ COPY . .
 RUN echo "===== CMakeLists.txt locations =====" && \
     find . -name "CMakeLists.txt" -type f
 
-# ---- Configure (core-only, zero optional features) ----
-RUN cmake -S . -B build \
-    -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_TESTING=OFF \
-    -DBUILD_EXAMPLES=OFF \
-    -DBUILD_BENCHMARKS=OFF \
-    -DENABLE_LOCAL_TRANSLATION=OFF \
-    -DENABLE_ENCRYPTION=OFF \
-    -DENABLE_TFLITE=OFF 2>&1 | tee /tmp/cmake-config.log \
-    || (echo "===== CMake configure failed =====" && \
-        cat /tmp/cmake-config.log && \
-        exit 1)
-
-# ---- Show available build targets ----
-RUN echo "===== Available build targets =====" && \
-    cmake --build build --target help 2>&1 | head -50
-
-# ---- Try building with error capture ----
-RUN cmake --build build --target apm_backend --verbose 2>&1 | tee /tmp/build.log; \
-    BUILD_EXIT_CODE=$?; \
-    if [ $BUILD_EXIT_CODE -ne 0 ]; then \
-        echo "===== BUILD FAILED (exit code $BUILD_EXIT_CODE) ====="; \
-        echo "===== Last 200 lines of build output ====="; \
-        tail -200 /tmp/build.log; \
-        echo "===== First compilation error ====="; \
-        grep -A 10 "error:" /tmp/build.log | head -30 || true; \
-        exit 1; \
-    fi
-
-# ---- DEBUG: Find where the binary actually is ----
-RUN echo "===== Searching for binaries =====" && \
-    find /app/build -type f -executable 2>/dev/null | head -20 || true
+# Configure and build without pipelines that mask the compiler exit status.
+RUN cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARKS=OFF \
+    -DENABLE_LOCAL_TRANSLATION=OFF -DENABLE_ENCRYPTION=OFF -DENABLE_TFLITE=OFF
+RUN cmake --build build --target apm_backend --parallel 2
 
 # ============================
 # Stage 2 — Runtime (FastAPI + APM)
@@ -72,9 +44,8 @@ RUN apt-get update && apt-get install -y \
 
 RUN python3 -m pip install --no-cache-dir --upgrade pip
 
-RUN pip install --no-cache-dir \
-    fastapi \
-    "uvicorn[standard]"
+COPY backend/requirements.txt /tmp/apm-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/apm-requirements.txt
 
 WORKDIR /app
 

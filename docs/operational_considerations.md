@@ -67,7 +67,10 @@ Approximate behavior by stage:
 | Translation | ~200 ms | High* |
 | Projection | <1 ms | Low |
 
-\* Translation executes asynchronously and does not block the main DSP pipeline.
+\* Translation is submitted asynchronously, but `APMSystem::process()` waits
+for its future. The complete pipeline therefore has no hard real-time or
+sub-10 ms guarantee. The separate smartglasses DSP measurements concern that
+engine alone; measure capture, inference and output together on target hardware.
 
 Performance tuning should be:
 - Incremental
@@ -153,12 +156,37 @@ Deployment correctness is more important than peak throughput.
 
 ## Security Considerations
 
-- APM performs no network I/O by default
-- Audio data remains in-process
-- Translation backends may introduce external dependencies
+- The native DSP library does not start networking merely by construction;
+  the API, telemetry and signaling services expose separate network boundaries.
+- Local translation writes a temporary WAV and invokes a Python subprocess.
+- Translation backends may introduce external dependencies.
 
 Security-sensitive deployments should audit translation implementations
 and isolate external services appropriately.
+
+## Version 11 operational contracts
+
+The full native pipeline accepts matching, mono microphone/reference frames at
+the configured sample rate, with finite samples in [-1, 1] and finite direction.
+Invalid input returns no output before DSP or monitoring state changes. Valid
+processing and `reset_all()` are serialized; externally exposed calibration and
+profile objects still require caller coordination. This is not a transaction
+around arbitrary exceptions in every DSP stage.
+
+With `APM_API_KEY` configured, protected API requests require
+`X-APM-API-Key`; loading the dashboard cannot issue authorization. With
+`SIGNALING_WS_TOKEN` configured, WebSocket joins require that token. Neither
+setting supplies individual user identity or per-room authorization. Configure
+the ASGI server's trusted proxy addresses deliberately: application code uses
+its resolved client address, not raw forwarded headers.
+
+Missing PortAudio cannot report active capture. Malformed telemetry preserves
+the last valid record; disconnected/stale readings identify fallback status.
+Calibration cannot become valid without accepted audio observations, but its
+latency estimate remains a software estimate, not a hardware measurement.
+
+See the [11.0.0 BEDROCK report](releases/v11.0.0-bedrock.md) for the invariant
+map, behavioral compatibility changes and remaining validation requirements.
 
 ---
 
@@ -189,7 +217,7 @@ These are intentionally deferred to avoid premature complexity.
 
 ## Status
 
-This document reflects current operational understanding as of **v10.1.0**.
+This document reflects current operational understanding as of **v11.0.0**.
 
 Operational guidance will evolve conservatively as real deployment
 experience accumulates.

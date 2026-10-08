@@ -173,7 +173,7 @@ const APMDashboard = () => {
   );
 
   const promptForApiKey = () => {
-    if (authPromptShown || serverAuthEnabled) return;
+    if (authPromptShown) return;
     setAuthPromptShown(true);
     setSettingsOpen(true);
     addToast(
@@ -234,8 +234,7 @@ const APMDashboard = () => {
     result: null,
   });
 
-  // Fetch server config on mount to detect if auth is pre-configured via
-  // the server-managed session cookie (APM_API_KEY env var on the backend).
+  // Authentication configuration does not grant credentials to the browser.
   useEffect(() => {
     fetch("/api/config", { credentials: "include" })
       .then((r) => r.json())
@@ -1830,16 +1829,7 @@ const APMDashboard = () => {
             <div className="space-y-4">
               <div>
                 <label className="text-sm text-gray-400 mb-2 block">API Key</label>
-                {serverAuthEnabled ? (
-                  <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-2">
-                    <Shield className="w-4 h-4 text-green-400 shrink-0" />
-                    <p className="text-xs text-green-300">
-                      Authentication is pre-configured by the server. No key
-                      required.
-                    </p>
-                  </div>
-                ) : (
-                  <>
+                <>
                     <input
                       type="password"
                       value={apiKey}
@@ -1851,11 +1841,10 @@ const APMDashboard = () => {
                       className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
                     />
                     <p className="mt-2 text-xs text-gray-400">
-                      Use the same value configured as <code>APM_API_KEY</code>{" "}
+                      {serverAuthEnabled ? "Authentication is required. Use" : "If authentication is enabled, use"} the value configured as <code>APM_API_KEY</code>{" "}
                       in Render environment settings.
                     </p>
-                  </>
-                )}
+                </>
               </div>
 
               {/* Profiles & Calibration */}

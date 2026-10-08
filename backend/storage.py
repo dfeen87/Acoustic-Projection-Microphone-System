@@ -2,20 +2,28 @@ import sqlite3
 import time
 import uuid
 import threading
+import math
+import os
+from contextlib import contextmanager
 from typing import Dict, List, Optional
 
 
 class Storage:
-    def __init__(self, db_path: str = "backend/data.sqlite") -> None:
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None) -> None:
+        self.db_path = db_path if db_path is not None else os.environ.get("APM_DB_PATH", "backend/data.sqlite")
         self._db_lock = threading.Lock()  # Add lock for thread safety
         self._init_db()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self):
         conn = sqlite3.connect(self.db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        return conn
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def _init_db(self) -> None:
         with self._db_lock:  # Protect database initialization
@@ -87,14 +95,24 @@ class Storage:
 
     def add_peer(self, name: str, ip: str) -> Dict[str, object]:
         peer = {
-            "id": "peer-" + uuid.uuid4().hex[:6],
             "name": name,
             "ip": ip,
             "status": "online",
             "last_seen": time.time()
         }
-        self.upsert_peer(peer)
-        return peer
+        # Adding an identity must never replace another peer after a generated
+        # ID collision. INSERT is authoritative across processes as well.
+        with self._db_lock, self._connect() as conn:
+            for _ in range(3):
+                peer["id"] = "peer-" + uuid.uuid4().hex[:6]
+                try:
+                    conn.execute("INSERT INTO peers (id, name, ip, status, last_seen) VALUES (?, ?, ?, ?, ?)",
+                                 (peer["id"], peer["name"], peer["ip"], peer["status"], peer["last_seen"]))
+                    return peer
+                except sqlite3.IntegrityError:
+                    if not conn.execute("SELECT 1 FROM peers WHERE id = ?", (peer["id"],)).fetchone():
+                        raise
+            raise ValueError("Could not allocate a unique peer identity")
 
     def delete_peer(self, peer_id: str) -> None:
         with self._db_lock:
@@ -130,23 +148,22 @@ class Storage:
                 conn.commit()
 
     def ensure_local_peer(self) -> Dict[str, object]:
-        local_id = self.get_metadata("local_peer_id")
-        if local_id:
-            peer = self.get_peer(local_id)
-            if peer:
-                return peer
-
-        local_id = "local-" + uuid.uuid4().hex[:8]
-        peer = {
-            "id": local_id,
-            "name": "You",
-            "ip": "127.0.0.1",
-            "status": "online",
-            "last_seen": time.time(),
-        }
-        self.upsert_peer(peer)
-        self.set_metadata("local_peer_id", local_id)
-        return peer
+        # The transaction protects identity creation across Storage instances
+        # and processes, not just threads sharing this object's lock.
+        with self._db_lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT peers.* FROM peers JOIN metadata ON peers.id = metadata.value "
+                "WHERE metadata.key = 'local_peer_id'"
+            ).fetchone()
+            if row:
+                return dict(row)
+            local_id = "local-" + uuid.uuid4().hex[:8]
+            peer = {"id": local_id, "name": "You", "ip": "127.0.0.1",
+                    "status": "online", "last_seen": time.time()}
+            conn.execute("INSERT INTO peers VALUES (?, ?, ?, ?, ?)", tuple(peer.values()))
+            conn.execute("INSERT OR REPLACE INTO metadata VALUES ('local_peer_id', ?)", (local_id,))
+            return peer
 
     def ensure_seed_peers(self) -> None:
         if self.count_peers() == 0:
@@ -187,6 +204,8 @@ class Storage:
         status: str = "calling",
         session_id: Optional[str] = None,
     ) -> Dict[str, object]:
+        if status not in {"calling", "ringing"}:
+            raise ValueError("New sessions must be calling or ringing")
         now = time.time()
         session = {
             "id": session_id or ("session-" + uuid.uuid4().hex[:10]),
@@ -197,6 +216,9 @@ class Storage:
         }
         with self._db_lock:  # Protect write operation
             with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                if not conn.execute("SELECT 1 FROM peers WHERE id = ?", (peer_id,)).fetchone():
+                    raise ValueError("Peer not found")
                 conn.execute(
                     """
                     INSERT INTO sessions (id, peer_id, status, created_at, updated_at)
@@ -212,6 +234,27 @@ class Storage:
                 )
                 conn.commit()
         return session
+
+    def register_incoming_session(self, local_id: str, session_id: str,
+                                  caller: Dict[str, object]) -> Dict[str, object]:
+        with self._db_lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if not conn.execute("SELECT 1 FROM peers WHERE id = ?", (local_id,)).fetchone():
+                raise ValueError("Local peer not found")
+            existing = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            if existing:
+                if existing["peer_id"] != local_id:
+                    raise ValueError("Session ID belongs to a different peer")
+                return dict(existing)
+            now = time.time()
+            conn.execute(
+                "INSERT OR IGNORE INTO peers (id, name, ip, status, last_seen) VALUES (?, ?, ?, ?, ?)",
+                (caller["id"], caller["name"], caller["ip"], "online", now),
+            )
+            session = {"id": session_id, "peer_id": local_id, "status": "ringing",
+                       "created_at": now, "updated_at": now}
+            conn.execute("INSERT INTO sessions VALUES (?, ?, ?, ?, ?)", tuple(session.values()))
+            return session
 
     def get_session(self, session_id: str) -> Optional[Dict[str, object]]:
         with self._connect() as conn:
@@ -239,18 +282,39 @@ class Storage:
             ).fetchone()
             return dict(row) if row else None
 
-    def update_session_status(self, session_id: str, status: str, updated_at: float) -> None:
-        with self._db_lock:  # Protect write operation
-            with self._connect() as conn:
-                conn.execute(
-                    "UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?",
-                    (status, updated_at, session_id),
-                )
-                conn.commit()
+    def update_session_status(self, session_id: str, status: str, updated_at: float) -> Optional[Dict[str, object]]:
+        transitions = {
+            "calling": {"ringing", "connected", "ended", "timeout"},
+            "ringing": {"connected", "ended", "timeout"},
+            "connected": {"ended"},
+            "ended": set(), "timeout": set(),
+        }
+        if isinstance(updated_at, bool) or not math.isfinite(updated_at) or updated_at < 0:
+            raise ValueError("Session timestamp must be finite and nonnegative")
+        if status not in transitions:
+            raise ValueError("Unknown session status")
+        with self._db_lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            if not row:
+                return None
+            session = dict(row)
+            if session["status"] == status:
+                return session  # Retries do not extend lifetime or rewrite history.
+            if status not in transitions.get(session["status"], set()):
+                raise ValueError("Invalid session transition")
+            if updated_at < session["updated_at"]:
+                raise ValueError("Stale session transition")
+            conn.execute("UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?",
+                         (status, updated_at, session_id))
+            session.update(status=status, updated_at=updated_at)
+            return session
 
     def mark_stale_sessions(self, timeout_seconds: float, now: Optional[float] = None) -> int:
         if now is None:
             now = time.time()
+        if not math.isfinite(timeout_seconds) or timeout_seconds < 0 or not math.isfinite(now) or now < 0:
+            raise ValueError("Invalid session timeout")
         threshold = now - timeout_seconds
         with self._db_lock:  # Protect write operation
             with self._connect() as conn:
@@ -268,6 +332,8 @@ class Storage:
     def purge_sessions(self, older_than_seconds: float, now: Optional[float] = None) -> int:
         if now is None:
             now = time.time()
+        if not math.isfinite(older_than_seconds) or older_than_seconds < 0 or not math.isfinite(now) or now < 0:
+            raise ValueError("Invalid session retention")
         threshold = now - older_than_seconds
         with self._db_lock:  # Protect write operation
             with self._connect() as conn:

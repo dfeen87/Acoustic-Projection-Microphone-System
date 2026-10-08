@@ -1,7 +1,8 @@
 import asyncio
 import json
 import os
-import secrets
+import hmac
+import ipaddress
 import subprocess
 import sys
 import threading
@@ -12,13 +13,14 @@ from typing import Literal
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from backend.storage import Storage
+from backend import json_contract
 from backend.telemetry import get_latest_metrics
 from backend.intent_engine import (
     intent_engine,
@@ -39,23 +41,7 @@ from backend.intent_engine import (
 # ---------------------------------------------------------------------------
 
 _API_KEY = os.environ.get("APM_API_KEY", "").strip()
-_EXEMPT_PREFIXES = ("/health", "/docs", "/openapi", "/redoc", "/api/config")
-
-# On Render (and other cloud platforms) HTTPS is always used, so the Secure
-# flag can be set on session cookies.  Locally we skip it so the cookie still
-# works over plain HTTP during development.
-_IS_PRODUCTION = bool(os.environ.get("RENDER", ""))
-
-# When API-key auth is active, generate a single-use random session token on
-# startup.  The browser receives this opaque token (not the real API key) in
-# an HTTP-only cookie so the secret key itself is never transmitted to the
-# client.  The token is valid for the lifetime of the process; a restart
-# issues a new one and any stored cookies are automatically invalidated.
-_SESSION_TOKEN = secrets.token_hex(32) if _API_KEY else ""
-
-# Cookie lifetime: 7 days.  A fresh token is issued on every server restart,
-# so the practical window of exposure is bounded by the deploy cadence.
-_SESSION_COOKIE_MAX_AGE = 7 * 24 * 60 * 60
+_EXEMPT_PATHS = {"/api/config"}
 
 SESSION_TIMEOUT_SECONDS = 30
 SESSION_CLEANUP_INTERVAL_SECONDS = 5
@@ -63,17 +49,7 @@ SESSION_PURGE_AFTER_SECONDS = 10 * 60
 
 
 def _extract_request_ip(request: Request) -> str:
-    """Best-effort client IP extraction (proxy-aware)."""
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    if forwarded_for:
-        first_hop = forwarded_for.split(",", 1)[0].strip()
-        if first_hop:
-            return first_hop
-
-    real_ip = request.headers.get("x-real-ip", "").strip()
-    if real_ip:
-        return real_ip
-
+    """Use ASGI identity; the server owns trusted-proxy header processing."""
     if request.client and request.client.host:
         return request.client.host
     return "127.0.0.1"
@@ -124,26 +100,29 @@ async def lifespan(app: FastAPI):
     local_peer = storage.ensure_local_peer()
     app.state.storage = storage
     app.state.local_peer_id = local_peer["id"]
-    app.state.stop_event = asyncio.Event()
-    app.state.housekeeper_task = asyncio.create_task(
-        session_housekeeper(storage, app.state.stop_event)
-    )
-
+    # Validate/construct dependencies before acquiring background resources.
     telemetry_client = getattr(app.state, "telemetry_client", None)
     if telemetry_client is None:
         from backend.telemetry import TelemetryClient
         telemetry_client = TelemetryClient()
         app.state.telemetry_client = telemetry_client
-    await telemetry_client.start()
+    app.state.stop_event = asyncio.Event()
+    app.state.housekeeper_task = asyncio.create_task(
+        session_housekeeper(storage, app.state.stop_event)
+    )
+    try:
+        await telemetry_client.start()
+        yield
+    finally:
+        # Startup and application exceptions must release both services too.
+        app.state.stop_event.set()
+        try:
+            await app.state.housekeeper_task
+        finally:
+            await telemetry_client.stop()
 
-    yield
-    # ---------- shutdown ----------
-    app.state.stop_event.set()
-    await app.state.housekeeper_task
-    await telemetry_client.stop()
 
-
-app = FastAPI(title="APM FastAPI Backend", version="10.1.0", lifespan=lifespan)
+app = FastAPI(title="APM FastAPI Backend", version="11.0.0", lifespan=lifespan)
 
 _CORS_ORIGINS_ENV = os.environ.get("APM_CORS_ORIGINS", "")
 _CORS_ORIGINS = [origin.strip() for origin in _CORS_ORIGINS_ENV.split(",") if origin.strip()]
@@ -165,15 +144,12 @@ async def api_key_middleware(request: Request, call_next) -> Response:
     path = request.url.path
 
     # Let CORS preflight and explicit exempt routes pass through untouched.
-    if request.method == "OPTIONS" or path.startswith(_EXEMPT_PREFIXES):
+    if request.method == "OPTIONS" or path in _EXEMPT_PATHS:
         return await call_next(request)
 
     if _API_KEY and path.startswith("/api"):
         provided = request.headers.get("X-APM-API-Key", "").strip()
-        session_cookie = request.cookies.get("apm_session", "").strip()
-        # Accept either the raw API key in the header (existing behaviour) or
-        # the opaque session token that the backend sets as an HTTP-only cookie.
-        if provided != _API_KEY and session_cookie != _SESSION_TOKEN:
+        if not hmac.compare_digest(provided.encode("utf-8"), _API_KEY.encode("utf-8")):
             return Response(content='{"detail":"Unauthorized"}', status_code=401,
                             media_type="application/json")
     return await call_next(request)
@@ -186,19 +162,13 @@ class StatusUpdate(BaseModel):
     status: Literal["online", "away", "busy"]
 
 class PeerCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1)
     ip: str
 
     @field_validator("ip")
     @classmethod
     def validate_ip(cls, v):
-        parts = v.split(".")
-        if len(parts) != 4:
-            raise ValueError("Invalid IPv4 address")
-        for part in parts:
-            if not part.isdigit() or not 0 <= int(part) <= 255:
-                raise ValueError("Invalid IPv4 address")
-        return v
+        return str(ipaddress.IPv4Address(v))
 
 class Peer(BaseModel):
     id: str
@@ -216,10 +186,15 @@ class Session(BaseModel):
 
 
 class IncomingSessionCreate(BaseModel):
-    session_id: str
-    caller_peer_id: str
-    caller_name: str
+    session_id: str = Field(min_length=1)
+    caller_peer_id: str = Field(min_length=1)
+    caller_name: str = Field(min_length=1)
     caller_ip: str
+
+    @field_validator("caller_ip")
+    @classmethod
+    def validate_caller_ip(cls, value):
+        return str(ipaddress.IPv4Address(value))
 
 class ProfileCreate(BaseModel):
     name: str
@@ -245,7 +220,7 @@ class SessionTranslationCreate(BaseModel):
     target_language: str
     original_text: str
     translated_text: str
-    timestamp_ms: float | None = None
+    timestamp_ms: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
 class IntentProcessRequest(BaseModel):
     text: str
@@ -419,30 +394,32 @@ def translate_text(body: TranslateRequest):
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=45,
         )
     except subprocess.TimeoutExpired as exc:
         raise HTTPException(504, "Translation timed out") from exc
+    except UnicodeError as exc:
+        raise HTTPException(502, "Translation output decoding failed") from exc
     except subprocess.CalledProcessError as exc:
         stderr = (exc.stderr or "").strip()
         detail = stderr.splitlines()[-1] if stderr else "Translation failed"
         raise HTTPException(500, detail) from exc
 
     try:
-        payload = json.loads(completed.stdout)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(500, "Translation output parsing failed") from exc
+        payload = json_contract.loads(completed.stdout)
+    except ValueError as exc:
+        raise HTTPException(502, "Translation output parsing failed") from exc
 
-    translated_text = str(payload.get("translated_text", "")).strip()
-    if not translated_text:
-        raise HTTPException(500, "Translation produced empty output")
+    if (not isinstance(payload, dict) or payload.get("success") is not True
+            or not isinstance(payload.get("translated_text"), str)
+            or not payload["translated_text"].strip()):
+        raise HTTPException(502, "Invalid or unsuccessful translation bridge response")
 
     return TranslateResponse(
-        transcribed_text=text,
-        translated_text=translated_text,
-        source_language=body.source_lang,
-        target_language=body.target_lang,
-        success=bool(payload.get("success", True)),
+        transcribed_text=text, translated_text=payload["translated_text"].strip(),
+        source_language=body.source_lang, target_language=body.target_lang,
+        success=True,
     ).model_dump()
 
 @app.post("/api/session/{session_id}/translation")
@@ -463,7 +440,7 @@ def publish_session_translation(session_id: str, body: SessionTranslationCreate)
         "target_language": body.target_language,
         "original_text": original_text,
         "translated_text": translated_text,
-        "timestamp_ms": body.timestamp_ms or (time.time() * 1000.0),
+        "timestamp_ms": body.timestamp_ms if body.timestamp_ms is not None else (time.time() * 1000.0),
     }
 
     with session_translations_lock:
@@ -475,7 +452,7 @@ def publish_session_translation(session_id: str, body: SessionTranslationCreate)
     return {"ok": True}
 
 @app.get("/api/session/{session_id}/translations")
-def get_session_translations(session_id: str, since_ms: float = 0):
+def get_session_translations(session_id: str, since_ms: float = Query(default=0, allow_inf_nan=False)):
     storage: Storage = app.state.storage
     if not storage.get_session(session_id):
         raise HTTPException(404, "Session not found")
@@ -507,13 +484,16 @@ def list_peers(request: Request):
 @app.post("/api/peers")
 def add_peer(body: PeerCreate):
     storage: Storage = app.state.storage
-    peer = storage.add_peer(body.name, body.ip)
+    try:
+        peer = storage.add_peer(body.name, body.ip)
+    except ValueError as exc:
+        raise HTTPException(503, str(exc)) from exc
     return {"ok": True, "peer": peer}
 
 @app.delete("/api/peers/{peer_id}")
 def remove_peer(peer_id: str, request: Request):
     local_peer = _ensure_request_peer(request)
-    if peer_id == local_peer["id"]:
+    if peer_id in {local_peer["id"], app.state.local_peer_id}:
         raise HTTPException(403, "Cannot delete the local peer")
     storage: Storage = app.state.storage
     if not storage.get_peer(peer_id):
@@ -556,7 +536,10 @@ def create_session(peer_id: str, request: Request):
     peer = storage.get_peer(peer_id)
     if not peer:
         raise HTTPException(404, "Peer not found")
-    session = storage.create_session(peer_id)
+    try:
+        session = storage.create_session(peer_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
     local_peer = _ensure_request_peer(request)
 
     # Best-effort cross-instance signaling: notify the remote peer backend
@@ -594,37 +577,28 @@ def get_incoming_session(request: Request):
     local_id = _ensure_request_peer(request)["id"]
     session = storage.get_latest_session_for_peer(local_id, ["calling", "ringing"])
     if not session:
+        # Cross-instance incoming calls address this node's stable identity.
+        session = storage.get_latest_session_for_peer(app.state.local_peer_id, ["calling", "ringing"])
+    if not session:
         return {"session": None}
     if session["status"] == "calling":
         now = time.time()
-        storage.update_session_status(session["id"], "ringing", now)
-        session["status"] = "ringing"
-        session["updated_at"] = now
+        try:
+            session = storage.update_session_status(session["id"], "ringing", now)
+        except ValueError:
+            return {"session": None}  # Accepted/expired concurrently; never revive it.
     return {"session": Session(**session).model_dump()}
 
 @app.post("/api/session/incoming")
 def register_incoming_session(body: IncomingSessionCreate):
     storage: Storage = app.state.storage
     local_id = app.state.local_peer_id
-    existing = storage.get_session(body.session_id)
-    if existing:
-        return {"session": Session(**existing).model_dump()}
-
-    remote_peer = storage.get_peer(body.caller_peer_id)
-    now = time.time()
-    if not remote_peer:
-        storage.upsert_peer(
-            {
-                "id": body.caller_peer_id,
-                "name": body.caller_name,
-                "ip": body.caller_ip,
-                "status": "online",
-                "last_seen": now,
-            }
-        )
-    session = storage.create_session(
-        local_id, status="ringing", session_id=body.session_id
-    )
+    try:
+        session = storage.register_incoming_session(local_id, body.session_id, {
+            "id": body.caller_peer_id, "name": body.caller_name, "ip": body.caller_ip,
+        })
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
     return {"session": Session(**session).model_dump()}
 
 
@@ -642,10 +616,13 @@ def accept_session(session_id: str):
     session = storage.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found")
-    now = time.time()
-    storage.update_session_status(session_id, "connected", now)
-    session["status"] = "connected"
-    session["updated_at"] = now
+    try:
+        session = storage.update_session_status(session_id, "connected", time.time())
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if session is None:
+        raise HTTPException(404, "Session not found")
+
     return {"ok": True, "session": Session(**session).model_dump()}
 
 @app.post("/api/session/{session_id}/end")
@@ -654,10 +631,12 @@ def end_session(session_id: str):
     session = storage.get_session(session_id)
     if not session:
         raise HTTPException(404, "Session not found")
-    now = time.time()
-    storage.update_session_status(session_id, "ended", now)
-    session["status"] = "ended"
-    session["updated_at"] = now
+    try:
+        session = storage.update_session_status(session_id, "ended", time.time())
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if session is None:
+        raise HTTPException(404, "Session not found")
     with session_translations_lock:
         session_translations.pop(session_id, None)
     return {"ok": True, "session": Session(**session).model_dump()}
@@ -678,23 +657,4 @@ def serve_frontend(request: Request, full_path: str):
     if not index_path.is_file():
         raise HTTPException(status_code=404, detail="Frontend build not found")
     response = FileResponse(index_path)
-    if _API_KEY:
-        # Set an HTTP-only session cookie so every browser that loads the UI
-        # is automatically authenticated without users needing to paste the
-        # API key manually.  The cookie value is an opaque random token (not
-        # the API key itself) generated at server startup.  Properties:
-        #   • httponly  – JavaScript cannot read it (XSS-safe)
-        #   • samesite=strict – not sent on cross-site requests (CSRF-safe)
-        #   • secure    – only transmitted over HTTPS (set in production)
-        #   • path=/    – accompanies every request to this origin
-        #   • max_age   – 7-day lifetime; refreshed on each page load
-        response.set_cookie(
-            key="apm_session",
-            value=_SESSION_TOKEN,
-            httponly=True,
-            samesite="strict",
-            secure=_IS_PRODUCTION,
-            path="/",
-            max_age=_SESSION_COOKIE_MAX_AGE,
-        )
     return response

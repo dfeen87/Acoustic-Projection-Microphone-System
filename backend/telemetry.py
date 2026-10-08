@@ -3,6 +3,8 @@ import json
 import logging
 import os
 import time
+import math
+from backend import json_contract
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,21 @@ cached_metrics = {
 }
 
 
+def _validated_metrics(data):
+    if not isinstance(data, dict):
+        raise ValueError("Telemetry must be an object")
+    record = {}
+    for name in ("peak_db", "rms_db", "snr_db", "latency_ms"):
+        value = data.get(name)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise ValueError(f"Invalid telemetry field: {name}")
+        record[name] = value
+    if record["latency_ms"] < 0 or type(data.get("clipping")) is not bool:
+        raise ValueError("Invalid telemetry latency or clipping")
+    record["clipping"] = data["clipping"]
+    return record
+
+
 class TelemetryClient:
     def __init__(self, host=None, port=None):
         self.host = host or os.environ.get("APM_TELEMETRY_HOST", "127.0.0.1")
@@ -39,11 +56,15 @@ class TelemetryClient:
         except ValueError:
             logger.warning("Invalid APM_TELEMETRY_PORT=%s; defaulting to 50055", raw_port)
             self.port = 50055
+        if not 1 <= self.port <= 65535:
+            raise ValueError("Telemetry port must be between 1 and 65535")
 
         self.running = False
         self.task = None
 
     async def start(self):
+        if self.task and not self.task.done():
+            return
         self.running = True
         self.task = asyncio.create_task(self._listen_loop())
 
@@ -55,6 +76,8 @@ class TelemetryClient:
                 await self.task
             except asyncio.CancelledError:
                 pass
+        self.task = None
+        cached_metrics["_offline"] = True
 
     async def _listen_loop(self):
         while self.running:
@@ -62,7 +85,6 @@ class TelemetryClient:
             try:
                 reader, writer = await asyncio.open_connection(self.host, self.port)
                 logger.info("Connected to telemetry server at %s:%s", self.host, self.port)
-                cached_metrics["_offline"] = False
 
                 server_closed = False
                 while self.running:
@@ -72,15 +94,9 @@ class TelemetryClient:
                         break  # Connection closed by server
 
                     try:
-                        data = json.loads(line.decode("utf-8"))
-                        # Update cache
-                        cached_metrics["peak_db"] = data.get("peak_db", -96.0)
-                        cached_metrics["rms_db"] = data.get("rms_db", -96.0)
-                        cached_metrics["snr_db"] = data.get("snr_db", 0.0)
-                        cached_metrics["clipping"] = data.get("clipping", False)
-                        cached_metrics["latency_ms"] = data.get("latency_ms", 0.0)
-                        cached_metrics["_updated_at"] = time.time()
-                        cached_metrics["_offline"] = False
+                        record = _validated_metrics(json_contract.loads(line.decode("utf-8")))
+                        # Validate the entire record before replacing valid evidence.
+                        cached_metrics.update(record, _updated_at=time.monotonic(), _offline=False)
                     except json.JSONDecodeError:
                         logger.warning("Invalid JSON from telemetry stream")
                     except Exception as e:
@@ -111,7 +127,7 @@ class TelemetryClient:
 
 def get_latest_metrics():
     # If the metrics haven't been updated in 2 seconds, mark offline.
-    stale = time.time() - cached_metrics.get("_updated_at", 0.0) > 2.0
+    stale = time.monotonic() - cached_metrics.get("_updated_at", 0.0) > 2.0
     if stale:
         cached_metrics["_offline"] = True
 
@@ -125,7 +141,7 @@ def get_latest_metrics():
             "snr_db": cached_metrics["snr_db"],
             "clipping": cached_metrics["clipping"],
             "latency_ms": cached_metrics["latency_ms"],
-            "offline": False,
+            "offline": True,
             "telemetry_source": "fallback",
         }
 

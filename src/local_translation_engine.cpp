@@ -12,53 +12,55 @@
 #include <chrono>
 #include <climits>
 #include <filesystem>
+#include <algorithm>
+#include <cmath>
+#include <unordered_set>
+#include <cstdint>
 
-namespace simple_json {
-    // Extracts a string field value from a JSON object.
-    // Returns an empty string if the field is not found or if the value is
-    // not a properly-terminated quoted string (parse failure).
-    std::string extract_field(const std::string& json, const std::string& field) {
-        std::string search = "\"" + field + "\":";
-        size_t pos = json.find(search);
-        if (pos == std::string::npos) return "";
-
-        pos += search.length();
-        // Skip whitespace before the opening quote
-        while (pos < json.length() && json[pos] == ' ') pos++;
-
-        // Value must start with a quote
-        if (pos >= json.length() || json[pos] != '"') return "";
-        pos++; // skip opening quote
-
-        // Find closing quote, respecting escaped quotes
-        size_t end = pos;
-        while (end < json.length()) {
-            if (json[end] == '\\') {
-                if (end + 1 >= json.length()) return ""; // truncated escape sequence
-                end += 2; // skip escaped character
-                continue;
-            }
-            if (json[end] == '"') break;
-            end++;
-        }
-        if (end >= json.length()) return ""; // unterminated string
-
-        return json.substr(pos, end - pos);
-    }
-
-    bool extract_bool(const std::string& json, const std::string& field) {
-        std::string search = "\"" + field + "\":";
-        size_t pos = json.find(search);
-        if (pos == std::string::npos) return false;
-
-        pos += search.length();
-        while (pos < json.length() && json[pos] == ' ') pos++;
-
-        return (pos < json.length() && json[pos] == 't');
-    }
-}
+#include <nlohmann/json.hpp>
 
 namespace apm {
+
+namespace {
+bool contains_nonblank_json_text(const std::string& text) {
+    // The JSON parser has already validated UTF-8. Decode only to recognize
+    // the Unicode whitespace used by Python str.strip() at the same boundary.
+    for (size_t index = 0; index < text.size();) {
+        uint32_t codepoint = static_cast<unsigned char>(text[index++]);
+        if (codepoint >= 0x80) {
+            const unsigned length = codepoint < 0xe0 ? 2 : codepoint < 0xf0 ? 3 : 4;
+            codepoint &= length == 2 ? 0x1f : length == 3 ? 0x0f : 0x07;
+            for (unsigned byte = 1; byte < length; ++byte) {
+                codepoint = (codepoint << 6) | (static_cast<unsigned char>(text[index++]) & 0x3f);
+            }
+        }
+        const bool whitespace = (codepoint >= 0x09 && codepoint <= 0x0d)
+            || (codepoint >= 0x1c && codepoint <= 0x20)
+            || codepoint == 0x85 || codepoint == 0xa0 || codepoint == 0x1680
+            || (codepoint >= 0x2000 && codepoint <= 0x200a)
+            || (codepoint >= 0x2028 && codepoint <= 0x2029)
+            || codepoint == 0x202f || codepoint == 0x205f || codepoint == 0x3000;
+        if (!whitespace) return true;
+    }
+    return false;
+}
+} // namespace
+
+std::string shell_argument(const std::string& value) {
+    if (value.find('\0') != std::string::npos) throw std::invalid_argument("NUL in translation argument");
+#ifdef _WIN32
+    // cmd.exe expands these characters even in quoted strings. Reject
+    // unsupported arguments rather than interpreting them as commands.
+    if (value.find_first_of("\"%!?^&|<>\r\n") != std::string::npos) {
+        throw std::invalid_argument("Unsupported Windows translation argument");
+    }
+    return "\"" + value + "\"";
+#else
+    std::string quoted = "'";
+    for (char ch : value) quoted += ch == '\'' ? "'\"'\"'" : std::string(1, ch);
+    return quoted + "'";
+#endif
+}
 
 std::string generate_temp_filename() {
     auto now = std::chrono::system_clock::now();
@@ -82,19 +84,22 @@ bool write_wav_file(const std::string& filename,
                    int sample_rate) {
     // Guard against WAV header overflow: the data chunk size and file size are
     // stored as uint32_t in the WAV header, so they must not exceed UINT32_MAX.
-    const size_t raw_data_bytes = samples.size() * sizeof(int16_t);
-    if (raw_data_bytes > static_cast<size_t>(UINT32_MAX) - 36) {
+    if (sample_rate <= 0 || sample_rate > INT_MAX / 2) return false;
+    if (samples.size() > (static_cast<size_t>(UINT32_MAX) - 36) / sizeof(int16_t)) {
         std::cerr << "ERROR: Audio data too large for WAV format ("
-                  << raw_data_bytes << " bytes)" << std::endl;
+                  << samples.size() << " samples)" << std::endl;
         return false;
     }
+    const size_t raw_data_bytes = samples.size() * sizeof(int16_t);
 
     std::ofstream file(filename, std::ios::binary);
     if (!file) return false;
 
     const int num_channels = 1;
     const int bits_per_sample = 16;
-    const int byte_rate = sample_rate * num_channels * bits_per_sample / 8;
+    // Divide the constant first: sample_rate * 16 can overflow even when
+    // the two-byte PCM rate fits the validated signed integer domain.
+    const int byte_rate = sample_rate * num_channels * (bits_per_sample / 8);
     const int block_align = num_channels * bits_per_sample / 8;
     const uint32_t data_size = static_cast<uint32_t>(raw_data_bytes);
     const uint32_t file_size = 36 + data_size;
@@ -121,12 +126,13 @@ bool write_wav_file(const std::string& filename,
     file.write(reinterpret_cast<const char*>(&data_size), 4);
 
     for (float sample : samples) {
-        int16_t value = static_cast<int16_t>(sample * 32767.0f);
+        if (!std::isfinite(sample)) sample = 0.0f;
+        int16_t value = static_cast<int16_t>(std::clamp(sample, -1.0f, 1.0f) * 32767.0f);
         file.write(reinterpret_cast<const char*>(&value), 2);
     }
 
     file.close();
-    return true;
+    return file.good();
 }
 
 std::string exec_command(const std::string& cmd) {
@@ -141,6 +147,9 @@ std::string exec_command(const std::string& cmd) {
     while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
         result += buffer.data();
     }
+    const bool read_failed = ferror(pipe.get()) != 0;
+    const int status = pclose(pipe.release());
+    if (read_failed || status != 0) throw std::runtime_error("Translation subprocess failed");
 
     return result;
 }
@@ -160,7 +169,7 @@ std::string find_python() {
         }
     }
 
-    return "python3";
+    return {};
 }
 
 class LocalTranslationEngine::Impl {
@@ -172,6 +181,10 @@ public:
 
     ~Impl() = default;
 
+    bool available() const {
+        return !python_cmd_.empty() && std::filesystem::is_regular_file(config_.script_path);
+    }
+
     TranslationResult translate(const std::vector<float>& audio_samples,
                                int sample_rate) {
         TranslationResult result;
@@ -179,7 +192,11 @@ public:
         result.target_language = config_.target_language;
 
         try {
-            std::string temp_wav = generate_temp_filename();
+            struct TemporaryWav {
+                std::string path;
+                ~TemporaryWav() { std::remove(path.c_str()); }
+            } temporary{generate_temp_filename()};
+            const auto& temp_wav = temporary.path;
             if (!write_wav_file(temp_wav, audio_samples, sample_rate)) {
                 result.success = false;
                 result.error_message = "Failed to write temporary WAV file";
@@ -190,12 +207,12 @@ public:
             if (config_.offline_mode) {
                 cmd << "APM_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 ";
             }
-            cmd << python_cmd_ << " " << config_.script_path
-                << " " << temp_wav
-                << " --source " << config_.source_language
-                << " --target " << config_.target_language
-                << " --whisper-model " << config_.whisper_model_path
-                << " --nllb-model " << config_.nllb_model_path;
+            cmd << shell_argument(python_cmd_) << " " << shell_argument(config_.script_path)
+                << " " << shell_argument(temp_wav)
+                << " --source " << shell_argument(config_.source_language)
+                << " --target " << shell_argument(config_.target_language)
+                << " --whisper-model " << shell_argument(config_.whisper_model_path)
+                << " --nllb-model " << shell_argument(config_.nllb_model_path);
             if (!config_.use_gpu) {
                 cmd << " --device cpu";
             }
@@ -206,15 +223,36 @@ public:
             try {
                 json_output = exec_command(cmd.str());
             } catch (const std::exception& e) {
-                std::remove(temp_wav.c_str());
                 result.success = false;
                 result.error_message = std::string("Failed to execute translation: ") + e.what();
                 return result;
             }
 
-            result.transcribed_text = simple_json::extract_field(json_output, "transcribed_text");
-            result.translated_text = simple_json::extract_field(json_output, "translated_text");
-            result.success = simple_json::extract_bool(json_output, "success");
+            // JSON objects with duplicate keys carry contradictory evidence.
+            // Reject them instead of letting a later success/text field win.
+            std::vector<std::unordered_set<std::string>> object_keys;
+            const auto payload = nlohmann::json::parse(json_output,
+                [&](int, nlohmann::json::parse_event_t event, nlohmann::json& value) {
+                    if (event == nlohmann::json::parse_event_t::object_start) {
+                        object_keys.emplace_back();
+                    } else if (event == nlohmann::json::parse_event_t::key) {
+                        if (!object_keys.back().insert(value.get<std::string>()).second) {
+                            throw std::invalid_argument("Duplicate translation response field");
+                        }
+                    } else if (event == nlohmann::json::parse_event_t::object_end) {
+                        object_keys.pop_back();
+                    }
+                    return true;
+                });
+            if (!payload.is_object() || !payload.contains("success") || !payload["success"].is_boolean()
+                    || !payload["success"].get<bool>() || !payload.contains("translated_text")
+                    || !payload["translated_text"].is_string()) {
+                result.error_message = "Invalid or unsuccessful translation bridge response";
+                return result;
+            }
+            result.transcribed_text = payload.value("transcribed_text", std::string{});
+            result.translated_text = payload["translated_text"].get<std::string>();
+            result.success = contains_nonblank_json_text(result.translated_text);
 
             if (!result.success) {
                 result.error_message = "Translation failed - check if models are installed";
@@ -222,7 +260,6 @@ public:
                 result.confidence = 0.95f;
             }
 
-            std::remove(temp_wav.c_str());
 
         } catch (const std::exception& e) {
             result.success = false;
@@ -259,7 +296,7 @@ private:
 
 LocalTranslationEngine::LocalTranslationEngine(const Config& config)
     : impl_(std::make_unique<Impl>(config)), config_(config) {
-    ready_ = true;
+    ready_ = impl_->available();
 }
 
 LocalTranslationEngine::~LocalTranslationEngine() = default;

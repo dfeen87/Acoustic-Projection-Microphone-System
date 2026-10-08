@@ -52,6 +52,32 @@ python3 backend/main.py --host 127.0.0.1 --port 8080
 |----------|---------|-------------|
 | `APM_API_HOST` | `0.0.0.0` | Host to bind to |
 | `APM_API_PORT` | `8080` | Port to bind to |
+| `APM_API_KEY` | unset | If set, require `X-APM-API-Key` on protected API requests |
+| `APM_DB_PATH` | `backend/data.sqlite` | SQLite state file; tests should use a temporary file |
+| `SIGNALING_WS_TOKEN` | unset | If set, require the token in WebSocket join messages |
+
+In 11.0.0, viewing the dashboard does not create an authorization cookie.
+Enter the configured API key in the dashboard or pass its header explicitly.
+`/api/config` only reports whether authentication is enabled. Unset credentials
+retain the prototype's open mode; the launcher binds its Python API to loopback.
+Use TLS and explicit ASGI trusted proxy configuration for network deployments.
+
+Sessions follow `calling/ringing -> connected -> ended`; pending sessions may
+also end or time out. Terminal sessions cannot be accepted again (HTTP 409).
+Repeated updates to the same state preserve timestamps. Incoming retries and
+stable node creation are SQLite transactions across independent connections.
+These are local persistence guarantees, not a distributed call protocol.
+
+Both signaling apps mount the same WebSocket handler. A connection joins one
+room and identity; relay requires membership and server-derived sender identity.
+Tokens authorize a prototype join, not ownership of an arbitrary room name.
+
+Run the enforced backend suite with:
+
+```bash
+python -m pip install -r backend/requirements-dev.txt
+python -m pytest backend/ -q
+```
 
 ### Command-Line Arguments
 

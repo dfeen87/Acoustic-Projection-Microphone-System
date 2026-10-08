@@ -10,6 +10,8 @@
 const http = require("http");
 const { spawn } = require("child_process");
 const path = require("path");
+const os = require("os");
+const fs = require("fs");
 
 const TEST_CONFIG = {
   BACKEND_PORT: 8888,
@@ -141,16 +143,20 @@ function startLauncher() {
     });
 
     proc.on("exit", (code) => {
-      if (code !== 0 && code !== null) {
+      if (code !== null) {
         reject(new Error(`Launcher exited with code ${code}\n${startupLogs}`));
       }
     });
 
-    setTimeout(() => {
-      if (proc.exitCode === null) {
-        reject(new Error("Launcher startup timeout\n" + startupLogs));
-      }
+    const timeout = setTimeout(() => {
+      proc.kill("SIGTERM");
+      reject(new Error("Launcher startup timeout\n" + startupLogs));
     }, TEST_CONFIG.TIMEOUT);
+    proc.stdout.on("data", (data) => {
+      if (data.toString().includes("fully operational")) clearTimeout(timeout);
+    });
+    proc.on("exit", () => clearTimeout(timeout));
+
   });
 }
 
@@ -164,6 +170,8 @@ async function runTests() {
   console.log("=".repeat(60));
 
   let launcherProc = null;
+  const runtime = fs.mkdtempSync(path.join(os.tmpdir(), "apm-integration-"));
+  process.env.APM_DB_PATH = path.join(runtime, "control.sqlite");
 
   try {
     // -------------------------------------------------------------------------
@@ -237,7 +245,7 @@ async function runTests() {
       const res = await httpRequest({
         hostname: "localhost",
         port: TEST_CONFIG.BACKEND_PORT,
-        path: "/signaling/unknown",
+        path: "/api/signaling/unknown",
         method: "GET"
       });
       if (![400, 404].includes(res.statusCode)) {
@@ -276,6 +284,40 @@ async function runTests() {
     });
 
     // -------------------------------------------------------------------------
+    // Built frontend must fetch executable assets and reach the control plane.
+    await test("UI serves bundled JavaScript", async () => {
+      const root = await httpRequest({ hostname: "localhost", port: TEST_CONFIG.UI_PORT, path: "/" });
+      const match = root.data.match(/src="([^" ]+\.js)"/);
+      if (!match) throw new Error("No bundled script in dashboard");
+      const asset = await httpRequest({ hostname: "localhost", port: TEST_CONFIG.UI_PORT, path: match[1] });
+      if (asset.statusCode !== 200 || !asset.headers["content-type"].includes("javascript")) {
+        throw new Error("Dashboard bundle was not served as JavaScript");
+      }
+    });
+    await test("UI forwards functional API request", async () => {
+      const result = await httpRequest({ hostname: "localhost", port: TEST_CONFIG.UI_PORT,
+        path: "/api/intent/process", method: "POST", headers: { "Content-Type": "application/json" } },
+        JSON.stringify({ text: "Please fix deployment ASAP" }));
+      if (result.statusCode !== 200 || !JSON.parse(result.data).primary_intent) {
+        throw new Error("Dashboard cannot process intent through its own origin");
+      }
+    });
+    await test("UI proxy cannot turn forwarded headers into client identity", async () => {
+      const baseline = await httpRequest({ hostname: "localhost", port: TEST_CONFIG.UI_PORT,
+        path: "/api/status", method: "GET" });
+      const forged = await httpRequest({ hostname: "localhost", port: TEST_CONFIG.UI_PORT,
+        path: "/api/status", method: "GET", headers: {
+          "X-Forwarded-For": "203.0.113.99",
+          "X-Forwarded-Proto": "https",
+          "Forwarded": "for=203.0.113.99;proto=https",
+          "X-Real-IP": "203.0.113.99",
+        } });
+      if (baseline.statusCode !== 200 || forged.statusCode !== 200 ||
+          JSON.parse(baseline.data).peer_id !== JSON.parse(forged.data).peer_id) {
+        throw new Error("Untrusted headers changed the dashboard's persisted client identity");
+      }
+    });
+
     // Load sanity (non-benchmark)
     // -------------------------------------------------------------------------
 
@@ -296,6 +338,8 @@ async function runTests() {
     });
 
   } catch (err) {
+    testResults.failed++;
+    testResults.tests.push({ name: "System startup and suite completion", passed: false, error: err.message });
     log.fail(`Test suite error: ${err.message}`);
     if (err.stack) console.error(err.stack);
   } finally {
@@ -305,19 +349,20 @@ async function runTests() {
 
     log.section("Cleanup");
 
-    if (launcherProc && !launcherProc.killed) {
+    if (launcherProc && launcherProc.exitCode === null && launcherProc.signalCode === null) {
       log.info("Stopping launcher...");
       launcherProc.kill("SIGTERM");
 
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 6500));
 
-      if (!launcherProc.killed) {
+      if (launcherProc.exitCode === null && launcherProc.signalCode === null) {
         log.info("Force killing launcher...");
         launcherProc.kill("SIGKILL");
       }
 
       log.success("Launcher stopped");
     }
+    fs.rmSync(runtime, { recursive: true, force: true });
   }
 
   // ---------------------------------------------------------------------------

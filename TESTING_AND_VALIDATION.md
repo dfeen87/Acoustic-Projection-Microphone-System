@@ -1,6 +1,31 @@
 # Testing and Validation Report
 
 ## Overview
+
+**Current baseline: 11.0.0, Pass B validated 2026-10-08 UTC.** The
+[Bedrock 1.1 adversarial report](docs/releases/v11.0.0-bedrock-1.1-pass-b.md#validation-results)
+records Debug/full GCC and Clang Release 8/8, minimal Release and ASan/UBSan 7/7,
+full-feature Debug UBSan/ThreadSanitizer 8/8, backend 89 passed at the original checkpoint, launcher 10 passed,
+API smoke 4 passed, and separate serial Release timing budgets 2/2. Negative startup,
+installed SDK consumption, uncontaminated TGZ and API-container authorization/restart
+checks passed. Four documented diagnostic regressions and the real launcher's 12 checks
+passed; optimized standalone API smoke correctly rejects disabled assertions.
+The coverage build passes 7/7, but local GCC 14/LCOV trace consistency
+validation remains unresolved. The corrected hosted run completed 22 jobs successfully
+with two expected skips and no failures, including all native platforms and Docker.
+Installer payloads, real inference and target hardware retain explicit validation gaps
+in that report. The original
+[Pass A report](docs/releases/v11.0.0-bedrock.md) remains available.
+The final [signaling compatibility follow-up](docs/releases/v11.0.0-bedrock-1.1-pass-b.md#pre-merge-signaling-compatibility-follow-up)
+proves lobby rooms and call-session IDs are independent: signaling 32 passed,
+adversarial 35 passed and complete backend 113 passed, with API smoke, launcher,
+diagnostic and maintained UI build checks rerun. Earlier hosted runs are historical
+checkpoints. The follow-up source commit `1d20334` passed its own
+[hosted run 37757515904](https://github.com/dfeen87/Acoustic-Projection-Microphone-System/actions/runs/37757515904):
+22 jobs passed, two expected skips and no failures, including Docker image/runtime.
+The report below is the historical February validation;
+its test counts and setup commands are not the current release's evidence.
+
 This document details the testing and validation steps performed on the APM System to ensure its reliability and functionality. The system comprises a C++ high-performance DSP backend, a Python FastAPI control plane, and a React-based UI.
 
 **Last validated**: 2026-02-21  

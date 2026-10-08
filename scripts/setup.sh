@@ -20,7 +20,7 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 # Banner
 echo "============================================"
 echo "  APM System Setup Script"
-echo "  Version 10.1.0"
+echo "  Version 11.0.0"
 echo "============================================"
 echo ""
 
@@ -120,7 +120,7 @@ configure_project() {
     
     cmake .. \
         -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
-        -DBUILD_TESTS=$BUILD_TESTS \
+        -DBUILD_TESTING=$BUILD_TESTS \
         -DBUILD_BENCHMARKS=$BUILD_BENCHMARKS \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
     

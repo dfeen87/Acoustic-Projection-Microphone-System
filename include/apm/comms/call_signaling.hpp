@@ -4,6 +4,7 @@
 #include <vector>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <chrono>
 #include <map>
 #include <thread>          
@@ -151,14 +152,16 @@ public:
      * @brief Get active call session
      * @return Pointer to session or nullptr if no active call
      */
-    const CallSession* get_active_session() const;
+    // Owned immutable snapshot; safe after concurrent state changes.
+    std::optional<CallSession> get_active_session() const;
     
     /**
      * @brief Get session by ID
      * @param session_id Session ID
      * @return Pointer to session or nullptr if not found
      */
-    const CallSession* get_session(const std::string& session_id) const;
+    // Owned immutable snapshot; safe after concurrent state changes.
+    std::optional<CallSession> get_session(const std::string& session_id) const;
     
     /**
      * @brief Get all sessions
@@ -286,7 +289,8 @@ private:
     void cleanup_old_sessions();
     
     bool initialized_{false};
-    bool running_{false};
+    // Shutdown and both worker loops share this stop flag.
+    std::atomic<bool> running_{false};
     
     Participant local_participant_;
     uint16_t listen_port_{5060};

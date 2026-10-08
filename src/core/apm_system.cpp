@@ -12,15 +12,69 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <limits>
+#include <stdexcept>
+#include <unordered_set>
 
 namespace apm {
+
+namespace {
+size_t checked_sample_count(size_t frames, int sr, int channels) {
+    if (sr <= 0 || channels <= 0) throw std::invalid_argument("Invalid audio frame dimensions");
+    if (frames > std::vector<float>().max_size() / static_cast<size_t>(channels)) {
+        throw std::length_error("Audio frame size overflow");
+    }
+    return frames * static_cast<size_t>(channels);
+}
+
+bool valid_profile(const Profile& p) {
+    return !p.name.empty() && p.name.find_first_of("\r\n") == std::string::npos
+        && std::isfinite(p.calibration.rms_noise_floor_db)
+        && std::isfinite(p.calibration.peak_noise_floor_db)
+        && std::isfinite(p.calibration.recommended_input_gain) && p.calibration.recommended_input_gain >= 0
+        && std::isfinite(p.calibration.estimated_latency_ms) && p.calibration.estimated_latency_ms >= 0
+        && std::isfinite(p.max_feedback_attenuation_db) && p.max_feedback_attenuation_db >= 0
+        && p.max_feedback_notches >= 0
+        && std::isfinite(p.user_eq_low_gain) && p.user_eq_low_gain >= 0
+        && std::isfinite(p.user_eq_mid_gain) && p.user_eq_mid_gain >= 0
+        && std::isfinite(p.user_eq_high_gain) && p.user_eq_high_gain >= 0;
+}
+
+float parse_float(const std::string& value) {
+    size_t end = 0;
+    float result = std::stof(value, &end);
+    if (end != value.size() || !std::isfinite(result)) throw std::invalid_argument("Invalid profile number");
+    return result;
+}
+
+int parse_int(const std::string& value) {
+    size_t end = 0;
+    int result = std::stoi(value, &end);
+    if (end != value.size()) throw std::invalid_argument("Invalid profile integer");
+    return result;
+}
+
+bool parse_bool(const std::string& value) {
+    if (value != "0" && value != "1") throw std::invalid_argument("Invalid profile boolean");
+    return value == "1";
+}
+
+APMSystem::Config checked_config(APMSystem::Config config) {
+    if (config.sample_rate <= 0 || config.num_microphones <= 0 || config.num_speakers <= 0
+            || !std::isfinite(config.mic_spacing_m) || config.mic_spacing_m < 0
+            || !std::isfinite(config.speaker_spacing_m) || config.speaker_spacing_m < 0) {
+        throw std::invalid_argument("Invalid APM system configuration");
+    }
+    return config;
+}
+} // namespace
 
 // ============================================================================
 // AudioFrame Implementation
 // ============================================================================
 
 AudioFrame::AudioFrame(size_t samples, int sr, int ch)
-    : data_(samples * ch), sample_rate_(sr), channels_(ch) {
+    : data_(checked_sample_count(samples, sr, ch)), sample_rate_(sr), channels_(ch) {
     metadata_.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now().time_since_epoch());
 }
@@ -38,7 +92,7 @@ size_t AudioFrame::frame_count() const {
 }
 
 std::vector<float> AudioFrame::channel(int ch) const {
-    if (ch >= channels_) return {};
+    if (ch < 0 || ch >= channels_) return {};
 
     std::vector<float> result(frame_count());
     for (size_t i = 0; i < result.size(); ++i) {
@@ -75,7 +129,11 @@ void AudioFrame::compute_metadata() {
 // ============================================================================
 
 BeamformingEngine::BeamformingEngine(int mics, float spacing)
-    : array_size_(mics), spacing_m_(spacing) {}
+    : array_size_(mics), spacing_m_(spacing) {
+    if (mics <= 0 || !std::isfinite(spacing) || spacing < 0) {
+        throw std::invalid_argument("Invalid microphone array configuration");
+    }
+}
 
 float BeamformingEngine::lagrange_interpolate(
     std::span<const float> signal,
@@ -489,7 +547,11 @@ DirectionalProjector::DirectionalProjector(
     int speakers,
     float spacing)
     : speaker_array_size_(speakers),
-      spacing_m_(spacing) {}
+      spacing_m_(spacing) {
+    if (speakers <= 0 || !std::isfinite(spacing) || spacing < 0) {
+        throw std::invalid_argument("Invalid speaker array configuration");
+    }
+}
 
 std::vector<AudioFrame>
 DirectionalProjector::create_projection_signals(
@@ -498,24 +560,24 @@ DirectionalProjector::create_projection_signals(
     float target_distance_m) {
 
     std::vector<AudioFrame> speaker_signals;
+    if (!std::isfinite(target_azimuth_rad) || !std::isfinite(target_distance_m)
+            || target_distance_m < 0) return speaker_signals;
 
     for (int sp = 0; sp < speaker_array_size_; ++sp) {
         AudioFrame signal = source;
         auto samples = signal.samples();
 
-        float pos = sp * spacing_m_;
-        float delay_sec =
-            (pos * std::sin(target_azimuth_rad)) /
-            speed_of_sound_;
+        // Finite float geometry can still overflow float intermediate values.
+        // Bound the floating-point delay before converting it to an index.
+        const double delay_samples =
+            (static_cast<double>(sp) * spacing_m_ * std::sin(target_azimuth_rad)
+             / speed_of_sound_) * source.sample_rate();
 
-        int delay_samples =
-            static_cast<int>(delay_sec * source.sample_rate());
-
-        if (delay_samples > 0 &&
-            delay_samples < static_cast<int>(samples.size())) {
+        if (delay_samples >= 1.0 && delay_samples < static_cast<double>(samples.size())) {
+            const auto delay_index = static_cast<std::ptrdiff_t>(delay_samples);
 
             std::rotate(samples.begin(),
-                        samples.begin() + delay_samples,
+                        samples.begin() + delay_index,
                         samples.end());
         }
 
@@ -546,6 +608,7 @@ ProfileManager::ProfileManager() {
 }
 
 bool ProfileManager::save_profile(const Profile& profile, const std::string& filepath) {
+    if (!valid_profile(profile)) return false;
     // Simple Key-Value serialization
     std::ofstream out(filepath);
     if (!out.is_open()) return false;
@@ -563,7 +626,8 @@ bool ProfileManager::save_profile(const Profile& profile, const std::string& fil
     out << "user_eq_mid_gain=" << profile.user_eq_mid_gain << "\n";
     out << "user_eq_high_gain=" << profile.user_eq_high_gain << "\n";
 
-    return true;
+    out.flush();
+    return out.good();
 }
 
 std::optional<Profile> ProfileManager::load_profile(const std::string& filepath) {
@@ -571,6 +635,7 @@ std::optional<Profile> ProfileManager::load_profile(const std::string& filepath)
     if (!in.is_open()) return std::nullopt;
 
     Profile profile;
+    std::unordered_set<std::string> seen;
     std::string line;
     while (std::getline(in, line)) {
         auto pos = line.find('=');
@@ -578,28 +643,39 @@ std::optional<Profile> ProfileManager::load_profile(const std::string& filepath)
 
         std::string key = line.substr(0, pos);
         std::string value = line.substr(pos + 1);
+        // Allow CRLF files written on Windows, but not truncated/ambiguous values.
+        if (!value.empty() && value.back() == '\r') value.pop_back();
+        if (!seen.insert(key).second) return std::nullopt;
 
         try {
             if (key == "name") profile.name = value;
-            else if (key == "rms_noise_floor_db") profile.calibration.rms_noise_floor_db = std::stof(value);
-            else if (key == "peak_noise_floor_db") profile.calibration.peak_noise_floor_db = std::stof(value);
-            else if (key == "recommended_input_gain") profile.calibration.recommended_input_gain = std::stof(value);
-            else if (key == "estimated_latency_ms") profile.calibration.estimated_latency_ms = std::stof(value);
-            else if (key == "calibration_valid") profile.calibration.valid = (value == "1");
-            else if (key == "max_feedback_attenuation_db") profile.max_feedback_attenuation_db = std::stof(value);
-            else if (key == "max_feedback_notches") profile.max_feedback_notches = std::stoi(value);
-            else if (key == "feedback_suppression_enabled") profile.feedback_suppression_enabled = (value == "1");
-            else if (key == "user_eq_low_gain") profile.user_eq_low_gain = std::stof(value);
-            else if (key == "user_eq_mid_gain") profile.user_eq_mid_gain = std::stof(value);
-            else if (key == "user_eq_high_gain") profile.user_eq_high_gain = std::stof(value);
+            else if (key == "rms_noise_floor_db") profile.calibration.rms_noise_floor_db = parse_float(value);
+            else if (key == "peak_noise_floor_db") profile.calibration.peak_noise_floor_db = parse_float(value);
+            else if (key == "recommended_input_gain") profile.calibration.recommended_input_gain = parse_float(value);
+            else if (key == "estimated_latency_ms") profile.calibration.estimated_latency_ms = parse_float(value);
+            else if (key == "calibration_valid") profile.calibration.valid = parse_bool(value);
+            else if (key == "max_feedback_attenuation_db") profile.max_feedback_attenuation_db = parse_float(value);
+            else if (key == "max_feedback_notches") profile.max_feedback_notches = parse_int(value);
+            else if (key == "feedback_suppression_enabled") profile.feedback_suppression_enabled = parse_bool(value);
+            else if (key == "user_eq_low_gain") profile.user_eq_low_gain = parse_float(value);
+            else if (key == "user_eq_mid_gain") profile.user_eq_mid_gain = parse_float(value);
+            else if (key == "user_eq_high_gain") profile.user_eq_high_gain = parse_float(value);
         } catch (...) {
-            // Ignore parse errors on individual lines
+            return std::nullopt;
+        }
+    }
+    if (in.bad() || !valid_profile(profile)) return std::nullopt;
+    if (profile.calibration.valid) {
+        for (const auto* key : {"rms_noise_floor_db", "peak_noise_floor_db",
+                               "recommended_input_gain", "estimated_latency_ms"}) {
+            if (!seen.count(key)) return std::nullopt;
         }
     }
     return profile;
 }
 
 void ProfileManager::add_profile(const Profile& profile) {
+    if (!valid_profile(profile)) throw std::invalid_argument("Invalid profile");
     auto it = std::find_if(profiles_.begin(), profiles_.end(),
                            [&](const Profile& p) { return p.name == profile.name; });
     if (it != profiles_.end()) {
@@ -647,9 +723,11 @@ void AutoCalibrationEngine::start_calibration() {
 
 void AutoCalibrationEngine::cancel_calibration() {
     current_step_ = Step::Idle;
+    current_profile_.valid = false;
 }
 
 void AutoCalibrationEngine::advance_step() {
+    if (frames_processed_ == 0) return;
     switch (current_step_) {
         case Step::MeasureNoiseFloor:
             current_profile_.rms_noise_floor_db = 10.0f * std::log10(std::max(acc_energy_ / frames_processed_, 1e-10f));
@@ -687,6 +765,7 @@ void AutoCalibrationEngine::process_frame(const AudioFrame& frame) {
     if (samples.empty()) return;
 
     for (float s : samples) {
+        if (!std::isfinite(s) || std::abs(s) > 1.0f) return;
         energy += s * s;
         peak = std::max(peak, std::abs(s));
     }
@@ -854,7 +933,7 @@ HealthStatus DiagnosticsEngine::run_startup_checks(int expected_sample_rate, int
 // ============================================================================
 
 APMSystem::APMSystem(const Config& cfg)
-    : config_(cfg),
+    : config_(checked_config(cfg)),
       beamformer_(cfg.num_microphones, cfg.mic_spacing_m),
       echo_canceller_(2048),
       projector_(cfg.num_speakers, cfg.speaker_spacing_m) {
@@ -902,6 +981,20 @@ std::vector<AudioFrame> APMSystem::process(
     const std::vector<AudioFrame>& microphone_array,
     const AudioFrame& speaker_reference,
     float target_direction_rad) {
+
+    std::lock_guard<std::mutex> pipeline_lock(pipeline_mutex_);
+    if (!std::isfinite(target_direction_rad) || microphone_array.size() != static_cast<size_t>(config_.num_microphones)
+            || microphone_array.empty()) return {};
+    const auto frames = microphone_array.front().frame_count();
+    auto valid_frame = [&](const AudioFrame& frame) {
+        return frame.sample_rate() == config_.sample_rate && frame.channels() == 1
+            && frame.frame_count() == frames && frames > 0
+            && std::all_of(frame.samples().begin(), frame.samples().end(), [](float sample) {
+                return std::isfinite(sample) && std::abs(sample) <= 1.0f;
+            });
+    };
+    if (!std::all_of(microphone_array.begin(), microphone_array.end(), valid_frame)
+            || !valid_frame(speaker_reference)) return {};
 
     // ---- DSP PIPELINE ONLY ----
     auto beamformed =
@@ -963,6 +1056,7 @@ std::vector<AudioFrame> APMSystem::process(
 }
 
 void APMSystem::reset_all() {
+    std::lock_guard<std::mutex> pipeline_lock(pipeline_mutex_);
     echo_canceller_.reset();
     noise_suppressor_.reset_state();
     vad_.reset();

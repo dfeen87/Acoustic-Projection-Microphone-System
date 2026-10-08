@@ -428,7 +428,7 @@ class APMConfigGUI:
     def check_updates(self):
         """Check for application updates"""
         messagebox.showinfo("Updates", 
-                          "You are running version 10.1.0\n"
+                          "You are running version 11.0.0\n"
                           "No updates available.")
     
     def export_config(self):

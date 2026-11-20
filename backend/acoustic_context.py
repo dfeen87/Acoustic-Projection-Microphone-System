@@ -54,6 +54,7 @@ class AcousticObservation:
     speech_confidence: float
     music_confidence: float
     music_event: Optional[str] = None
+    speech_detected: Optional[bool] = None  # Native APMS VAD flag; preserve hangover state
 
 
 @dataclass(frozen=True)
@@ -114,10 +115,17 @@ class ContinuousAcousticContext:
         if label is not None and (not isinstance(label, str) or not label.strip() or len(label) > 240):
             raise ValueError("music_event must be a nonempty label of at most 240 characters")
 
+        if observation.speech_detected is not None and not isinstance(observation.speech_detected, bool):
+            raise ValueError("speech_detected must be a boolean or None")
+
         previous_attention = self._attention
         music_detected = observation.music_confidence >= self.config.music_on
         # VAD hysteresis avoids rapidly alternating on threshold noise.
-        if self._speech_active:
+        if observation.speech_detected is not None:
+            # Respect native VAD's hangover state; a low score does not cancel
+            # its explicit speech_detected=True result.
+            self._speech_active = observation.speech_detected
+        elif self._speech_active:
             self._speech_active = observation.speech_confidence > self.config.speech_off
         else:
             self._speech_active = observation.speech_confidence >= self.config.speech_on
